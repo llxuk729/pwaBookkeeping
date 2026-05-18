@@ -1,0 +1,135 @@
+/* ============================================
+   Design Tokens — PWA Bookkeeping
+   ============================================ */
+
+:root {
+  /* ---- Color Palette (Light Theme - Default) ---- */
+  --color-bg-primary: #f8fafc;
+  --color-bg-secondary: #ffffff;
+  --color-bg-card: rgba(255, 255, 255, 0.85);
+  --color-bg-card-solid: #ffffff;
+  --color-bg-input: rgba(0, 0, 0, 0.04);
+  --color-bg-hover: rgba(0, 0, 0, 0.06);
+  --color-bg-nav: rgba(248, 250, 252, 0.85);
+
+  /* Accent gradient */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-income: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  --gradient-expense: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --gradient-surface: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+
+  /* Accent colors */
+  --color-accent: #667eea;
+  --color-accent-light: #8b9cf7;
+  --color-accent-dark: #4c5fd7;
+  --color-income: #43e97b;
+  --color-expense: #f5576c;
+
+  /* Text colors */
+  --color-text-primary: rgba(0, 0, 0, 0.88);
+  --color-text-secondary: rgba(0, 0, 0, 0.56);
+  --color-text-tertiary: rgba(0, 0, 0, 0.38);
+  --color-text-inverse: #ffffff;
+
+  /* Border colors */
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-light: rgba(0, 0, 0, 0.04);
+  --color-border-accent: rgba(102, 126, 234, 0.3);
+
+  /* Status colors */
+  --color-success: #43e97b;
+  --color-warning: #fbbf24;
+  --color-danger: #f5576c;
+  --color-info: #60a5fa;
+
+  /* Category colors */
+  --cat-food: #ff6b6b;
+  --cat-transport: #4ecdc4;
+  --cat-shopping: #a78bfa;
+  --cat-entertainment: #fbbf24;
+  --cat-housing: #60a5fa;
+  --cat-medical: #f472b6;
+  --cat-education: #34d399;
+  --cat-salary: #43e97b;
+  --cat-investment: #818cf8;
+  --cat-other: #94a3b8;
+
+  /* ---- Typography ---- */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-size-xs: 0.6875rem;    /* 11px */
+  --font-size-sm: 0.75rem;      /* 12px */
+  --font-size-base: 0.875rem;   /* 14px */
+  --font-size-md: 1rem;         /* 16px */
+  --font-size-lg: 1.125rem;     /* 18px */
+  --font-size-xl: 1.375rem;     /* 22px */
+  --font-size-2xl: 1.75rem;     /* 28px */
+  --font-size-3xl: 2.25rem;     /* 36px */
+
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ---- Spacing ---- */
+  --space-xs: 0.25rem;   /* 4px */
+  --space-sm: 0.5rem;    /* 8px */
+  --space-md: 0.75rem;   /* 12px */
+  --space-base: 1rem;    /* 16px */
+  --space-lg: 1.25rem;   /* 20px */
+  --space-xl: 1.5rem;    /* 24px */
+  --space-2xl: 2rem;     /* 32px */
+  --space-3xl: 3rem;     /* 48px */
+
+  /* ---- Border Radius ---- */
+  --radius-sm: 0.5rem;    /* 8px */
+  --radius-md: 0.75rem;   /* 12px */
+  --radius-lg: 1rem;      /* 16px */
+  --radius-xl: 1.25rem;   /* 20px */
+  --radius-full: 50%;
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.3);
+  --shadow-glow-strong: 0 0 40px rgba(102, 126, 234, 0.5);
+
+  /* ---- Transitions ---- */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.25s ease;
+  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---- Z-Index ---- */
+  --z-nav: 100;
+  --z-modal-backdrop: 200;
+  --z-modal: 210;
+  --z-toast: 300;
+
+  /* ---- Layout ---- */
+  --nav-height: 4.5rem;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+}
+
+/* ============================================
+   Dark Theme Overrides
+   ============================================ */
+.dark {
+  --color-bg-primary: #0f0f1a;
+  --color-bg-secondary: #1a1a2e;
+  --color-bg-card: rgba(30, 30, 55, 0.7);
+  --color-bg-card-solid: #1e1e37;
+  --color-bg-input: rgba(255, 255, 255, 0.06);
+  --color-bg-hover: rgba(255, 255, 255, 0.08);
+  --color-bg-nav: rgba(15, 15, 26, 0.85);
+
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.56);
+  --color-text-tertiary: rgba(255, 255, 255, 0.32);
+  --color-text-inverse: #0f0f1a;
+
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-light: rgba(255, 255, 255, 0.04);
+}
