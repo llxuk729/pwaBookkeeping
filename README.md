@@ -1,5 +1,65 @@
-# Vue 3 + Vite
+# 🥟 智能早点记账 (AI Bookkeeping PWA)
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+一个专门为早餐店/家庭记账场景打造的**纯本地、高隐私、强智能**的渐进式 Web 应用 (PWA)。
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+基于现代 Web 技术栈构建，它不仅支持传统的键盘输入，还集成了浏览器原生的语音识别，并且突破性地在前端 Web Worker 中直接运行**大模型 (Transformers.js)** 进行自然语言的语义理解和自动分类，整个过程不需要向任何外部服务器发送您的隐私数据。
+
+## ✨ 核心特性
+
+- **🤖 纯本地 AI 语义理解**：
+  - 摆脱死板的关键词匹配。内置经过量化的中文字符串嵌入特征提取模型 (`bge-small-zh-v1.5`)。
+  - 输入“小米12元”，AI 能够计算语义相似度并自动为您精准归类到“黄小米”。
+  - **动态分类发现**：当您输入系统中不存在的商品时（且相似度极低），系统会自动为您生成并保存全新的支出分类。
+- **🎙️ 智能语音输入**：结合 Web Speech API，按住按钮直接说话，语音瞬间转为文字，并触发 AI 记账提取。
+- **🔒 绝对的隐私安全**：
+  - **无需后端 API**：所有数据均使用 IndexedDB (Dexie.js) 保存在您的浏览器本地。
+  - **离线可用 (PWA)**：支持添加到手机桌面，在没有网络连接的厨房、仓库也能顺畅记账和进行 AI 识别（得益于本地加载的 .onnx 模型）。
+- **🎨 现代流畅的用户体验**：
+  - 支持 **浅色 (Light) / 深色 (Dark)** 模式无缝切换。
+  - 玻璃拟物态 (Glassmorphism) UI 设计，精美的交互动画和触觉反馈感。
+- **🛡️ 坚固的数据保护墙**：
+  - 跨月智能备份提醒，告别遗忘。
+  - **安全防作死升级**：在您升级新版本应用前，强制后台自动导出本地数据的完整 JSON 备份文件，确保万无一失。
+- **📊 完整的账单管理**：日账单、月账单统计；一键导出支持 Excel 读取的 CSV 文件。
+
+## 🛠️ 技术栈
+
+- **核心框架**: Vue 3 (Composition API)
+- **构建工具**: Vite
+- **AI 引擎**: `@xenova/transformers` (在 Web Worker 中运行量化 ONNX 模型)
+- **本地数据库**: Dexie.js (基于 IndexedDB)
+- **状态管理**: Pinia
+- **PWA支持**: `vite-plugin-pwa`
+
+## 🚀 快速开始
+
+### 安装依赖
+```bash
+npm install
+```
+
+### 下载模型文件 (首次运行必须)
+由于应用依赖本地 AI 引擎，需要先将模型文件拉取到本地静态目录（`public/models`）：
+```bash
+node scripts/download_model.js
+```
+*(下载时间视网络情况而定，大约需要下载 20-30MB 的文件)*
+
+### 运行开发服务器
+```bash
+npm run dev
+```
+
+### 构建与打包
+```bash
+npm run build
+```
+打包后生成的 `dist` 文件夹即为产物。
+
+## 📖 部署说明
+
+请查看单独的 [部署指南 (DEPLOYMENT.md)](./DEPLOYMENT.md) 了解如何将本项目发布到网上，以及为何不能直接在本地通过双击 HTML 文件使用。
+
+## 📜 许可证
+
+MIT License
