@@ -26,7 +26,12 @@
             <div class="record-main" @click="editRecord(record)">
               <div class="list-item-icon" :style="{ background: record.categoryColor + '20' }">{{ record.categoryIcon }}</div>
               <div class="list-item-content">
-                <div class="list-item-title">{{ record.note || record.categoryName }}</div>
+                <div class="list-item-title">
+                  {{ record.note || record.categoryName }}
+                  <span v-if="record.weather" class="weather-tag" :title="getWeatherLabel(record.weather)">
+                    {{ getWeatherIcon(record.weather) }}
+                  </span>
+                </div>
                 <div class="list-item-subtitle">{{ record.categoryName }}</div>
               </div>
               <div class="list-item-trailing">
@@ -58,6 +63,23 @@
         <div class="input-group">
           <label class="input-label">日期</label>
           <input v-model="editingRecord.date" type="date" class="input date-input" />
+        </div>
+        <!-- Weather Selector (Only for income) -->
+        <div v-if="editingRecord.type === 'income'" class="input-group">
+          <label class="input-label">当日天气</label>
+          <div class="weather-selector">
+            <button
+              v-for="w in weatherOptions"
+              :key="w.value"
+              type="button"
+              class="chip weather-chip"
+              :class="{ active: editingRecord.weather === w.value }"
+              @click="editingRecord.weather = w.value"
+            >
+              <span>{{ w.icon }}</span>
+              <span>{{ w.label }}</span>
+            </button>
+          </div>
         </div>
       </div>
       <template #footer>
@@ -93,6 +115,24 @@ const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const editingRecord = ref(null)
 const recordToDelete = ref(null)
+
+const weatherOptions = [
+  { value: 'sunny', label: '晴天', icon: '☀️' },
+  { value: 'cloudy', label: '多云', icon: '⛅' },
+  { value: 'rainy', label: '雨天', icon: '🌧️' },
+  { value: 'snowy', label: '雪天', icon: '❄️' },
+  { value: 'windy', label: '大风', icon: '🍃' }
+]
+
+function getWeatherIcon(weatherValue) {
+  const option = weatherOptions.find(w => w.value === weatherValue)
+  return option ? option.icon : ''
+}
+
+function getWeatherLabel(weatherValue) {
+  const option = weatherOptions.find(w => w.value === weatherValue)
+  return option ? option.label : ''
+}
 
 const filteredGroups = computed(() => {
   let groups = recordsStore.groupedByDate
@@ -137,7 +177,8 @@ async function saveEdit() {
   await recordsStore.updateRecord(editingRecord.value.id, {
     amount: editingRecord.value.amount,
     note: editingRecord.value.note,
-    date: editingRecord.value.date
+    date: editingRecord.value.date,
+    weather: editingRecord.value.type === 'income' ? (editingRecord.value.weather || '') : ''
   })
   showEditModal.value = false
 }
@@ -176,4 +217,26 @@ async function executeDelete() {
 .delete-btn:hover { opacity: 1; }
 .edit-form { display: flex; flex-direction: column; gap: var(--space-base); }
 .date-input { color-scheme: dark; }
+
+/* Weather Selector & Tag */
+.weather-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.weather-chip {
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--font-size-sm);
+}
+
+.weather-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  margin-left: var(--space-xs);
+  vertical-align: middle;
+}
 </style>

@@ -34,6 +34,15 @@
 
     <!-- Quick Input -->
     <div class="input-section card" id="quick-input">
+      <!-- AI Status Indicator -->
+      <div class="ai-status-indicator">
+        <span class="ai-status-dot" :class="aiState.status"></span>
+        <span class="ai-status-text">{{ aiState.message }}</span>
+        <div v-if="aiState.status === 'loading' && aiState.progress > 0" class="ai-progress-bar">
+          <div class="ai-progress-fill" :style="{ width: aiState.progress + '%' }"></div>
+        </div>
+      </div>
+
       <div class="input-row">
         <input
           ref="inputRef"
@@ -156,6 +165,24 @@
               id="date-input"
             />
           </div>
+
+          <!-- Weather impact (Only for income) -->
+          <div v-if="parseResult.type === 'income'" class="parse-field">
+            <span class="parse-label">当日天气</span>
+            <div class="weather-selector">
+              <button
+                v-for="w in weatherOptions"
+                :key="w.value"
+                type="button"
+                class="chip weather-chip"
+                :class="{ active: parseResult.weather === w.value }"
+                @click="parseResult.weather = w.value"
+              >
+                <span>{{ w.icon }}</span>
+                <span>{{ w.label }}</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <button
@@ -186,7 +213,12 @@
             {{ record.categoryIcon }}
           </div>
           <div class="list-item-content">
-            <div class="list-item-title">{{ record.note || record.categoryName }}</div>
+            <div class="list-item-title">
+              {{ record.note || record.categoryName }}
+              <span v-if="record.weather" class="weather-tag" :title="getWeatherLabel(record.weather)">
+                {{ getWeatherIcon(record.weather) }}
+              </span>
+            </div>
             <div class="list-item-subtitle">{{ record.categoryName }}</div>
           </div>
           <div class="list-item-trailing">
@@ -212,7 +244,7 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRecordsStore } from '../stores/records.js'
 import { useCategoriesStore } from '../stores/categories.js'
 import { useSpeech } from '../composables/useSpeech.js'
-import { parseInput } from '../services/parser.js'
+import { parseInput, aiState } from '../services/parser.js'
 import { exportBackup } from '../services/export.js'
 
 const recordsStore = useRecordsStore()
@@ -222,6 +254,24 @@ const { isListening, transcript, interimTranscript, isSupported, toggleListening
 const inputRef = ref(null)
 const inputText = ref('')
 const parseResult = ref(null)
+
+const weatherOptions = [
+  { value: 'sunny', label: '晴天', icon: '☀️' },
+  { value: 'cloudy', label: '多云', icon: '⛅' },
+  { value: 'rainy', label: '雨天', icon: '🌧️' },
+  { value: 'snowy', label: '雪天', icon: '❄️' },
+  { value: 'windy', label: '大风', icon: '🍃' }
+]
+
+function getWeatherIcon(weatherValue) {
+  const option = weatherOptions.find(w => w.value === weatherValue)
+  return option ? option.icon : ''
+}
+
+function getWeatherLabel(weatherValue) {
+  const option = weatherOptions.find(w => w.value === weatherValue)
+  return option ? option.label : ''
+}
 
 // Today's records
 const recentRecords = computed(() => recordsStore.today)
@@ -372,7 +422,8 @@ async function handleSave() {
       categoryId: categoryIdToSave,
       amount: parseResult.value.amount,
       note: parseResult.value.note,
-      date: parseResult.value.date
+      date: parseResult.value.date,
+      weather: parseResult.value.weather || ''
     })
 
     // Show success via toast (using provide/inject pattern later)
@@ -632,5 +683,78 @@ async function handleSave() {
 
 .recent-list .list-item:not(:last-child) {
   border-bottom: 1px solid var(--color-border-light);
+}
+
+/* AI Status Indicator */
+.ai-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.ai-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.ai-status-dot.loading {
+  background: #fbbf24;
+  animation: pulse-dot 1.5s infinite;
+}
+
+.ai-status-dot.ready {
+  background: #10b981;
+}
+
+.ai-status-dot.error {
+  background: #f43f5e;
+}
+
+.ai-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--color-bg-input);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-left: var(--space-sm);
+}
+
+.ai-progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.3s ease;
+}
+
+/* Weather Selector */
+.weather-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.weather-chip {
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--font-size-sm);
+}
+
+.weather-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  margin-left: var(--space-xs);
+  vertical-align: middle;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.6; }
 }
 </style>

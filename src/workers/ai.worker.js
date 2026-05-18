@@ -66,7 +66,11 @@ self.addEventListener('message', async (event) => {
     return;
   }
 
-  if (type === 'parse' && extractor) {
+  if (type === 'parse') {
+    if (!extractor) {
+      postMessage({ id, status: 'error', error: 'AI模型尚未就绪' });
+      return;
+    }
     try {
       // Update embeddings if categories changed
       if (categories && categories.length > 0) {

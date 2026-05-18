@@ -77,6 +77,7 @@ export const useRecordsStore = defineStore('records', () => {
       amount: parseFloat(record.amount),
       note: record.note || '',
       date: record.date || new Date().toISOString().split('T')[0],
+      weather: record.type === 'income' ? (record.weather || '') : '',
       createdAt: Date.now()
     }
 

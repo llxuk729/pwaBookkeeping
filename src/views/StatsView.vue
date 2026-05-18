@@ -56,6 +56,26 @@
         </div>
       </div>
     </div>
+
+    <!-- Weather & Income Correlation -->
+    <div v-if="weatherIncomeStats.length > 0" class="chart-section card">
+      <h3 class="chart-title">☀️ 天气对收入的影响 (日均营业收入)</h3>
+      <div class="weather-stats-list">
+        <div v-for="item in weatherIncomeStats" :key="item.value" class="weather-stat-item">
+          <span class="weather-stat-icon">{{ item.icon }}</span>
+          <div class="weather-stat-info">
+            <div class="weather-stat-header">
+              <span class="weather-stat-name">{{ item.label }}</span>
+              <span class="weather-stat-value">日均 ¥{{ item.avg.toFixed(2) }}</span>
+            </div>
+            <div class="weather-stat-bar-track">
+              <div class="weather-stat-bar-fill" :style="{ width: getBarWidth(item.avg) + '%', background: `linear-gradient(90deg, ${item.color}30, ${item.color})` }"></div>
+            </div>
+            <span class="weather-stat-details">累计营业额 ¥{{ item.total.toFixed(2) }} / 共记录 {{ item.count }} 天</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -224,6 +244,56 @@ function renderCharts() {
   })
 }
 
+// Weather income stats calculation
+const weatherIncomeStats = computed(() => {
+  const incomes = periodRecords.value.filter(r => r.type === 'income')
+  if (incomes.length === 0) return []
+
+  const weatherTotals = { sunny: 0, rainy: 0, cloudy: 0, snowy: 0, windy: 0 }
+  const weatherDates = { sunny: new Set(), rainy: new Set(), cloudy: new Set(), snowy: new Set(), windy: new Set() }
+
+  for (const r of incomes) {
+    const w = r.weather
+    if (w && weatherTotals[w] !== undefined) {
+      weatherTotals[w] += r.amount
+      weatherDates[w].add(r.date)
+    }
+  }
+
+  const result = []
+  const weatherMap = {
+    sunny: { label: '晴天', icon: '☀️', color: '#fbbf24' },
+    cloudy: { label: '多云', icon: '⛅', color: '#60a5fa' },
+    rainy: { label: '雨天', icon: '🌧️', color: '#a78bfa' },
+    snowy: { label: '雪天', icon: '❄️', color: '#38bdf8' },
+    windy: { label: '大风', icon: '🍃', color: '#34d399' }
+  }
+
+  for (const w of ['sunny', 'cloudy', 'rainy', 'snowy', 'windy']) {
+    const count = weatherDates[w].size
+    if (count > 0) {
+      const total = weatherTotals[w]
+      result.push({
+        value: w,
+        label: weatherMap[w].label,
+        icon: weatherMap[w].icon,
+        color: weatherMap[w].color,
+        total: total,
+        count: count,
+        avg: total / count
+      })
+    }
+  }
+
+  return result.sort((a, b) => b.avg - a.avg)
+})
+
+function getBarWidth(avg) {
+  if (weatherIncomeStats.value.length === 0) return 0
+  const max = Math.max(...weatherIncomeStats.value.map(item => item.avg), 1)
+  return (avg / max) * 100
+}
+
 watch([viewMode, currentYear, currentMonth, () => recordsStore.records.length], renderCharts)
 onMounted(renderCharts)
 </script>
@@ -247,4 +317,75 @@ onMounted(renderCharts)
 .legend-name { flex: 1; }
 .legend-amount { font-weight: var(--font-weight-medium); font-variant-numeric: tabular-nums; }
 .legend-percent { color: var(--color-text-secondary); min-width: 2.5rem; text-align: right; }
+
+/* Weather Stats */
+.weather-stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
+}
+
+.weather-stat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.weather-stat-icon {
+  font-size: 1.5rem;
+  background: var(--color-bg-input);
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.weather-stat-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.weather-stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-base);
+}
+
+.weather-stat-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.weather-stat-value {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-income);
+}
+
+.weather-stat-bar-track {
+  height: 8px;
+  background: var(--color-bg-input);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.weather-stat-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.weather-stat-details {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
 </style>
