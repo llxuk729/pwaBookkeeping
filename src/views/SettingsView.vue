@@ -98,7 +98,7 @@
     <div class="settings-section about-section">
       <div class="about-info">
         <div class="about-name">智能记账</div>
-        <div class="about-version">v1.0.0</div>
+        <div class="about-version">v{{ pkg.version }}</div>
         <div class="about-desc">语音输入 · AI辅助 · 离线可用</div>
       </div>
     </div>
@@ -111,6 +111,7 @@ import { useRecordsStore } from '../stores/records.js'
 import { useCategoriesStore } from '../stores/categories.js'
 import { exportToCSV, exportBackup, importBackup } from '../services/export.js'
 import { db, initializeDB } from '../db/database.js'
+import pkg from '../../package.json'
 
 const recordsStore = useRecordsStore()
 const categoriesStore = useCategoriesStore()
