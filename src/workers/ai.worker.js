@@ -2,7 +2,7 @@ import { pipeline, env } from '@xenova/transformers';
 
 // Configure transformers.js to use the local models
 env.allowRemoteModels = false;
-env.localModelPath = '/models/';
+env.localModelPath = import.meta.env.BASE_URL + 'models/';
 
 // Use a singleton pattern to keep the pipeline in memory
 class PipelineSingleton {
