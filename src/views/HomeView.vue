@@ -56,7 +56,7 @@
         <button
           class="btn btn-icon voice-btn"
           :class="{ 'voice-active': isListening }"
-          @click="toggleListening"
+          @click="handleVoiceButtonClick"
           v-if="isSupported"
           id="voice-btn"
           :title="isListening ? '停止录音' : '语音输入'"
@@ -425,6 +425,25 @@ watch(transcript, (val) => {
   }
 })
 
+// Handle voice button click with better UX for PWA
+async function handleVoiceButtonClick() {
+  // Check if we're in PWA standalone mode
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                      window.navigator.standalone
+  
+  if (isStandalone && !isListening.value) {
+    // In PWA mode, show a brief message about permission if needed
+    try {
+      await toggleListening()
+    } catch (err) {
+      console.warn('Voice recognition error:', err)
+    }
+  } else {
+    // Normal browser mode
+    toggleListening()
+  }
+}
+
 function handleInputChange() {
   // Auto-parse on input (debounced effect)
 }
@@ -709,6 +728,13 @@ async function handleSaveMultiple() {
 .voice-btn.voice-active {
   background: rgba(245, 87, 108, 0.2);
   border-color: var(--color-danger);
+}
+
+/* Add a subtle glow effect for PWA mode */
+@media (display-mode: standalone) {
+  .voice-btn:not(.voice-active):hover {
+    box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
+  }
 }
 
 .voice-icon {

@@ -48,11 +48,41 @@ export function useSpeech() {
     recognition.onerror = (event) => {
       error.value = event.error
       isListening.value = false
+      
+      // Handle specific errors
+      if (event.error === 'not-allowed') {
+        error.value = '麦克风访问被拒绝，请检查浏览器权限设置'
+      } else if (event.error === 'no-speech') {
+        error.value = '未检测到语音输入'
+      } else if (event.error === 'network') {
+        error.value = '网络连接错误，语音识别需要网络支持'
+      }
     }
 
     recognition.onend = () => {
       isListening.value = false
     }
+  }
+
+  /**
+   * Request microphone permission explicitly
+   * This helps with PWA standalone mode where permissions might not be prompted automatically
+   */
+  async function requestMicrophonePermission() {
+    try {
+      // Try to get microphone access to trigger permission prompt
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        // Immediately stop the stream as we only need it for permission request
+        stream.getTracks().forEach(track => track.stop())
+        return true
+      }
+    } catch (err) {
+      console.warn('Microphone permission request failed:', err)
+      error.value = '无法获取麦克风权限: ' + err.message
+      return false
+    }
+    return false
   }
 
   function startListening() {
@@ -62,6 +92,27 @@ export function useSpeech() {
     transcript.value = ''
     interimTranscript.value = ''
 
+    // For PWA standalone mode, ensure we have microphone permission first
+    if (window.matchMedia('(display-mode: standalone)').matches || 
+        window.navigator.standalone) {
+      // In PWA standalone mode, request permission explicitly
+      requestMicrophonePermission().then(hasPermission => {
+        if (hasPermission) {
+          startRecognition()
+        } else {
+          error.value = '需要麦克风权限才能使用语音输入功能'
+        }
+      }).catch(() => {
+        // If permission request fails, still try to start recognition
+        startRecognition()
+      })
+    } else {
+      // In browser mode, just start recognition normally
+      startRecognition()
+    }
+  }
+
+  function startRecognition() {
     try {
       recognition.start()
       isListening.value = true

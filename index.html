@@ -8,7 +8,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="智能记账" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png" />
+    <!-- Add microphone permission for PWA -->
+    <meta name="permissions-policy" content="microphone=self" />
+    <!-- iOS touch icons in multiple sizes -->
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="icons/apple-touch-icon-120.png" />
+    <link rel="apple-touch-icon" sizes="76x76" href="icons/apple-touch-icon-76.png" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

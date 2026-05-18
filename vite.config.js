@@ -18,6 +18,10 @@ export default defineConfig({
         display: 'standalone',
         scope: '/pwaBookkeeping/',
         start_url: '/pwaBookkeeping/',
+        // Add permissions for microphone access
+        permissions: [
+          'microphone'
+        ],
         icons: [
           {
             src: 'icons/icon-192.png',
@@ -34,6 +38,13 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
+          },
+          // iOS specific icons
+          {
+            src: 'icons/apple-touch-icon-180.png',
+            sizes: '180x180',
+            type: 'image/png',
+            purpose: 'any'
           }
         ]
       },
