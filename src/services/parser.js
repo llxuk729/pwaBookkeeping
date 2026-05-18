@@ -106,6 +106,22 @@ function extractDate(text) {
  * Extract Amount from string
  */
 function extractAmount(text) {
+  // First, try to match complex Chinese currency formats like "40块2毛8分" or "40块2"
+  // Pattern: X块Y毛Z分, where Y and Z are optional
+  const complexPattern = /(\d+)\s*块\s*(?:(\d+)\s*(?:毛|角))?\s*(?:(\d+)\s*分)?/;
+  const complexMatch = text.match(complexPattern);
+  
+  if (complexMatch) {
+    const yuan = parseInt(complexMatch[1], 10) || 0;
+    const jiao = complexMatch[2] ? parseInt(complexMatch[2], 10) : 0;
+    const fen = complexMatch[3] ? parseInt(complexMatch[3], 10) : 0;
+    
+    // Convert to decimal: yuan + jiao/10 + fen/100
+    const amount = yuan + (jiao / 10) + (fen / 100);
+    return parseFloat(amount.toFixed(2));
+  }
+  
+  // Then try standard patterns
   for (const pattern of amountPatterns) {
     const match = text.match(pattern);
     if (match) {
@@ -116,11 +132,13 @@ function extractAmount(text) {
       }
     }
   }
+  
   // Try to find any standalone number if previous failed
   const standaloneMatch = text.match(/(\d+\.?\d*)/);
   if (standaloneMatch) {
     return parseFloat(standaloneMatch[1]);
   }
+  
   return null;
 }
 
