@@ -44,23 +44,10 @@
       </div>
 
       <div class="input-row">
-        <input
-          ref="inputRef"
-          v-model="inputText"
-          class="input input-lg quick-input"
-          placeholder="输入记账内容，如：黄小米35"
-          @keyup.enter="handleParse"
-          @input="handleInputChange"
-          id="input-text"
-        />
-        <button
-          class="btn btn-icon voice-btn"
-          :class="{ 'voice-active': isListening }"
-          @click="handleVoiceButtonClick"
-          v-if="isSupported"
-          id="voice-btn"
-          :title="isListening ? '停止录音' : '语音输入'"
-        >
+        <input ref="inputRef" v-model="inputText" class="input input-lg quick-input" placeholder="输入记账内容，如：黄小米35"
+          @keyup.enter="handleParse" @input="handleInputChange" id="input-text" />
+        <button class="btn btn-icon voice-btn" :class="{ 'voice-active': isListening }" @click="handleVoiceButtonClick"
+          v-if="isSupported" id="voice-btn" :title="isListening ? '停止录音' : '语音输入'">
           <span class="voice-icon">🎤</span>
           <span v-if="isListening" class="voice-pulse"></span>
           <span v-if="isListening" class="voice-pulse voice-pulse-2"></span>
@@ -87,16 +74,10 @@
           <div class="parse-field">
             <span class="parse-label">类型</span>
             <div class="tab-bar parse-type-toggle">
-              <button
-                class="tab-item"
-                :class="{ active: parseResult.type === 'expense' }"
-                @click="parseResult.type = 'expense'; updateCategoryOptions()"
-              >支出</button>
-              <button
-                class="tab-item"
-                :class="{ active: parseResult.type === 'income' }"
-                @click="parseResult.type = 'income'; updateCategoryOptions()"
-              >收入</button>
+              <button class="tab-item" :class="{ active: parseResult.type === 'expense' }"
+                @click="parseResult.type = 'expense'; updateCategoryOptions()">支出</button>
+              <button class="tab-item" :class="{ active: parseResult.type === 'income' }"
+                @click="parseResult.type = 'income'; updateCategoryOptions()">收入</button>
             </div>
           </div>
 
@@ -105,15 +86,8 @@
             <span class="parse-label">金额</span>
             <div class="amount-input-wrap">
               <span class="amount-prefix">¥</span>
-              <input
-                v-model.number="parseResult.amount"
-                type="number"
-                step="0.01"
-                min="0"
-                class="input amount-input"
-                placeholder="0.00"
-                id="amount-input"
-              />
+              <input v-model.number="parseResult.amount" type="number" step="0.01" min="0" class="input amount-input"
+                placeholder="0.00" id="amount-input" />
             </div>
           </div>
 
@@ -122,22 +96,15 @@
             <span class="parse-label">分类</span>
             <div class="category-grid">
               <!-- Show dynamic new category if any -->
-              <button
-                v-if="parseResult.isNewCategory"
-                class="chip category-chip active"
-                style="background: rgba(148, 163, 184, 0.2); border-color: var(--color-accent);"
-              >
+              <button v-if="parseResult.isNewCategory" class="chip category-chip active"
+                style="background: rgba(148, 163, 184, 0.2); border-color: var(--color-accent);">
                 <span>✨</span>
                 <span>{{ parseResult.categoryName }} (新)</span>
               </button>
 
-              <button
-                v-for="cat in currentCategories"
-                :key="cat.id"
-                class="chip category-chip"
+              <button v-for="cat in currentCategories" :key="cat.id" class="chip category-chip"
                 :class="{ active: parseResult.categoryId === cat.id && !parseResult.isNewCategory }"
-                @click="parseResult.categoryId = cat.id; parseResult.categoryName = cat.name; parseResult.isNewCategory = false;"
-              >
+                @click="parseResult.categoryId = cat.id; parseResult.categoryName = cat.name; parseResult.isNewCategory = false;">
                 <span>{{ cat.icon }}</span>
                 <span>{{ cat.name }}</span>
               </button>
@@ -147,37 +114,21 @@
           <!-- Note -->
           <div class="parse-field">
             <span class="parse-label">备注</span>
-            <input
-              v-model="parseResult.note"
-              class="input"
-              placeholder="添加备注..."
-              id="note-input"
-            />
+            <input v-model="parseResult.note" class="input" placeholder="添加备注..." id="note-input" />
           </div>
 
           <!-- Date -->
           <div class="parse-field">
             <span class="parse-label">日期</span>
-            <input
-              v-model="parseResult.date"
-              type="date"
-              class="input date-input"
-              id="date-input"
-            />
+            <input v-model="parseResult.date" type="date" class="input date-input" id="date-input" />
           </div>
 
           <!-- Weather impact (Only for income) -->
           <div v-if="parseResult.type === 'income'" class="parse-field">
             <span class="parse-label">当日天气</span>
             <div class="weather-selector">
-              <button
-                v-for="w in weatherOptions"
-                :key="w.value"
-                type="button"
-                class="chip weather-chip"
-                :class="{ active: parseResult.weather === w.value }"
-                @click="parseResult.weather = w.value"
-              >
+              <button v-for="w in weatherOptions" :key="w.value" type="button" class="chip weather-chip"
+                :class="{ active: parseResult.weather === w.value }" @click="parseResult.weather = w.value">
                 <span>{{ w.icon }}</span>
                 <span>{{ w.label }}</span>
               </button>
@@ -185,12 +136,8 @@
           </div>
         </div>
 
-        <button
-          class="btn btn-primary btn-block btn-lg save-btn"
-          @click="handleSave"
-          :disabled="!canSave"
-          id="save-btn"
-        >
+        <button class="btn btn-primary btn-block btn-lg save-btn" @click="handleSave" :disabled="!canSave"
+          id="save-btn">
           <span>💾</span>
           <span>保存记录</span>
         </button>
@@ -211,13 +158,13 @@
               <span class="multi-item-index">#{{ index + 1 }}</span>
               <span class="multi-item-name">{{ item.note || item.categoryName || '未命名' }}</span>
             </div>
-            
+
             <div class="multi-item-fields">
               <div class="multi-field">
                 <label>金额</label>
                 <input v-model.number="item.amount" type="number" step="0.01" class="input input-sm" />
               </div>
-              
+
               <div class="multi-field">
                 <label>分类</label>
                 <select v-model="item.categoryId" class="input input-sm" @change="updateItemCategory(item)">
@@ -231,7 +178,7 @@
                   </option>
                 </select>
               </div>
-              
+
               <div class="multi-field">
                 <label>备注</label>
                 <input v-model="item.note" class="input input-sm" placeholder="备注..." />
@@ -240,12 +187,8 @@
           </div>
         </div>
 
-        <button
-          class="btn btn-primary btn-block btn-lg save-btn"
-          @click="handleSaveMultiple"
-          :disabled="!canSaveMultiple"
-          id="save-multiple-btn"
-        >
+        <button class="btn btn-primary btn-block btn-lg save-btn" @click="handleSaveMultiple"
+          :disabled="!canSaveMultiple" id="save-multiple-btn">
           <span>💾</span>
           <span>保存全部 ({{ parseResults.length }})</span>
         </button>
@@ -259,11 +202,7 @@
         <router-link to="/records" class="btn btn-ghost btn-sm">查看全部 →</router-link>
       </div>
       <div class="recent-list">
-        <div
-          v-for="record in recentRecords"
-          :key="record.id"
-          class="list-item"
-        >
+        <div v-for="record in recentRecords" :key="record.id" class="list-item">
           <div class="list-item-icon" :style="{ background: record.categoryColor + '20' }">
             {{ record.categoryIcon }}
           </div>
@@ -351,30 +290,30 @@ onMounted(() => {
 function checkBackupReminder() {
   const now = new Date()
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  
+
   // Get previous month
   const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const prevMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`
-  
+
   // Check if dismissed this month
   const dismissedMonth = localStorage.getItem('dismissedReminderMonth')
   if (dismissedMonth === currentMonthStr) return
-  
+
   // Check if there are records in the previous month
   const hasPrevMonthRecords = recordsStore.records.some(r => r.date.startsWith(prevMonthStr))
   if (!hasPrevMonthRecords) return
-  
+
   // Check if last backup was before the end of the previous month
   const lastBackupStr = localStorage.getItem('lastBackupDate')
   if (!lastBackupStr) {
     showBackupReminder.value = true
     return
   }
-  
+
   const lastBackupTime = new Date(lastBackupStr).getTime()
   // End of previous month
   const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).getTime()
-  
+
   if (lastBackupTime < endOfPrevMonth) {
     showBackupReminder.value = true
   }
@@ -412,7 +351,7 @@ const canSave = computed(() => {
 
 const canSaveMultiple = computed(() => {
   if (parseResults.value.length === 0) return false;
-  return parseResults.value.every(item => 
+  return parseResults.value.every(item =>
     item.amount > 0 && (item.categoryId || item.isNewCategory)
   );
 })
@@ -428,9 +367,9 @@ watch(transcript, (val) => {
 // Handle voice button click with better UX for PWA
 async function handleVoiceButtonClick() {
   // Check if we're in PWA standalone mode
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                      window.navigator.standalone
-  
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone
+
   if (isStandalone && !isListening.value) {
     // In PWA mode, show a brief message about permission if needed
     try {
@@ -452,16 +391,16 @@ async function handleParse() {
   if (!inputText.value.trim()) return
 
   const allCategories = categoriesStore.categories
-  
+
   // Try to parse multiple items first
   const results = await parseMultipleItems(inputText.value, allCategories)
-  
+
   if (results.length === 0) {
     parseResult.value = null
     parseResults.value = []
     return
   }
-  
+
   if (results.length === 1) {
     // Single item - use the original display logic
     const result = results[0]
@@ -479,7 +418,7 @@ async function handleParse() {
     parseResults.value = []
   } else {
     // Multiple items - show all for batch saving
-    
+
     // Apply default category logic to each item (same as single item)
     // Only set default if: no categoryId AND not a new category
     results.forEach((item) => {
@@ -493,7 +432,7 @@ async function handleParse() {
         }
       }
     })
-    
+
     parseResult.value = null
     parseResults.value = results
   }
@@ -524,7 +463,7 @@ function updateItemCategory(item) {
     ? categoriesStore.incomeCategories
     : categoriesStore.expenseCategories;
   const selectedCat = cats.find(c => c.id === item.categoryId);
-  
+
   if (selectedCat) {
     // User selected an existing category
     item.categoryName = selectedCat.name;
@@ -564,8 +503,8 @@ async function handleSave() {
       const newCategory = {
         name: parseResult.value.categoryName,
         type: parseResult.value.type,
-        icon: '✨', 
-        color: '#94a3b8', 
+        icon: '✨',
+        color: '#94a3b8',
         order: 99,
         isDefault: 0
       };
@@ -594,7 +533,7 @@ async function handleSaveMultiple() {
   try {
     for (const item of parseResults.value) {
       let categoryIdToSave = item.categoryId;
-      
+
       // If it's a new category, create it first
       if (item.isNewCategory) {
         const newCategory = {
@@ -1024,8 +963,19 @@ async function handleSaveMultiple() {
 }
 
 @keyframes pulse-dot {
-  0% { transform: scale(0.9); opacity: 0.6; }
-  50% { transform: scale(1.1); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.6; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
 }
 </style>

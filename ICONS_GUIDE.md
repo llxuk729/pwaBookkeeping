@@ -21,12 +21,14 @@ npm run generate-icons
 这将生成所有必要的图标尺寸：
 
 #### iOS 图标
+
 - `apple-touch-icon-180.png` (180x180) - iPhone 6 Plus及更新机型
 - `apple-touch-icon-152.png` (152x152) - iPad Retina
 - `apple-touch-icon-120.png` (120x120) - iPhone Retina
 - `apple-touch-icon-76.png` (76x76) - iPad非Retina
 
 #### Android/Web 图标
+
 - `icon-192.png` (192x192) - 用于PWA manifest
 - `icon-512.png` (512x512) - 用于PWA manifest
 
@@ -43,10 +45,26 @@ npm run build
 在`index.html`中，我们声明了多个尺寸的apple-touch-icon：
 
 ```html
-<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png" />
-<link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png" />
-<link rel="apple-touch-icon" sizes="120x120" href="icons/apple-touch-icon-120.png" />
-<link rel="apple-touch-icon" sizes="76x76" href="icons/apple-touch-icon-76.png" />
+<link
+  rel="apple-touch-icon"
+  sizes="180x180"
+  href="icons/apple-touch-icon-180.png"
+/>
+<link
+  rel="apple-touch-icon"
+  sizes="152x152"
+  href="icons/apple-touch-icon-152.png"
+/>
+<link
+  rel="apple-touch-icon"
+  sizes="120x120"
+  href="icons/apple-touch-icon-120.png"
+/>
+<link
+  rel="apple-touch-icon"
+  sizes="76x76"
+  href="icons/apple-touch-icon-76.png"
+/>
 ```
 
 ### PWA Manifest配置
@@ -56,22 +74,22 @@ npm run build
 ```javascript
 icons: [
   {
-    src: 'icons/icon-192.png',
-    sizes: '192x192',
-    type: 'image/png'
+    src: "icons/icon-192.png",
+    sizes: "192x192",
+    type: "image/png",
   },
   {
-    src: 'icons/icon-512.png',
-    sizes: '512x512',
-    type: 'image/png'
+    src: "icons/icon-512.png",
+    sizes: "512x512",
+    type: "image/png",
   },
   {
-    src: 'icons/apple-touch-icon-180.png',
-    sizes: '180x180',
-    type: 'image/png',
-    purpose: 'any'
-  }
-]
+    src: "icons/apple-touch-icon-180.png",
+    sizes: "180x180",
+    type: "image/png",
+    purpose: "any",
+  },
+];
 ```
 
 ## 注意事项
