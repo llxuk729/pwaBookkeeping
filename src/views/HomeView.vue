@@ -34,12 +34,12 @@
 
     <!-- Quick Input -->
     <div class="input-section card" id="quick-input">
-      <!-- AI Status Indicator -->
+      <!-- Parser Status Indicator -->
       <div class="ai-status-indicator">
-        <span class="ai-status-dot" :class="aiState.status"></span>
-        <span class="ai-status-text">{{ aiState.message }}</span>
-        <div v-if="aiState.status === 'loading' && aiState.progress > 0" class="ai-progress-bar">
-          <div class="ai-progress-fill" :style="{ width: aiState.progress + '%' }"></div>
+        <span class="ai-status-dot" :class="parserStatus.status"></span>
+        <span class="ai-status-text">{{ parserStatus.message }}</span>
+        <div v-if="parserStatus.status === 'loading' && parserStatus.progress > 0" class="ai-progress-bar">
+          <div class="ai-progress-fill" :style="{ width: parserStatus.progress + '%' }"></div>
         </div>
       </div>
 
@@ -197,6 +197,61 @@
       </div>
     </transition>
 
+    <!-- Multiple Items Preview -->
+    <transition name="modal">
+      <div v-if="parseResults.length > 0" class="multi-items-preview card card-glow" id="multi-items-preview">
+        <div class="parse-header">
+          <span class="parse-badge">AI 识别结果 ({{ parseResults.length }} 项)</span>
+          <button class="btn btn-ghost btn-sm" @click="clearParse">取消</button>
+        </div>
+
+        <div class="multi-items-list">
+          <div v-for="(item, index) in parseResults" :key="index" class="multi-item-card">
+            <div class="multi-item-header">
+              <span class="multi-item-index">#{{ index + 1 }}</span>
+              <span class="multi-item-name">{{ item.note || item.categoryName || '未命名' }}</span>
+            </div>
+            
+            <div class="multi-item-fields">
+              <div class="multi-field">
+                <label>金额</label>
+                <input v-model.number="item.amount" type="number" step="0.01" class="input input-sm" />
+              </div>
+              
+              <div class="multi-field">
+                <label>分类</label>
+                <select v-model="item.categoryId" class="input input-sm" @change="updateItemCategory(item)">
+                  <!-- Show new category option if applicable -->
+                  <option v-if="item.isNewCategory" :value="null" style="background: rgba(148, 163, 184, 0.2);">
+                    ✨ {{ item.categoryName }} (新)
+                  </option>
+                  <option value="">选择分类</option>
+                  <option v-for="cat in currentCategoriesForItem(item)" :key="cat.id" :value="cat.id">
+                    {{ cat.icon }} {{ cat.name }}
+                  </option>
+                </select>
+              </div>
+              
+              <div class="multi-field">
+                <label>备注</label>
+                <input v-model="item.note" class="input input-sm" placeholder="备注..." />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          class="btn btn-primary btn-block btn-lg save-btn"
+          @click="handleSaveMultiple"
+          :disabled="!canSaveMultiple"
+          id="save-multiple-btn"
+        >
+          <span>💾</span>
+          <span>保存全部 ({{ parseResults.length }})</span>
+        </button>
+      </div>
+    </transition>
+
     <!-- Recent Records -->
     <div class="recent-section" v-if="recentRecords.length > 0">
       <div class="section-header">
@@ -244,16 +299,24 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRecordsStore } from '../stores/records.js'
 import { useCategoriesStore } from '../stores/categories.js'
 import { useSpeech } from '../composables/useSpeech.js'
-import { parseInput, aiState } from '../services/parser.js'
+import { parseInput, parseMultipleItems } from '../services/newParser.js'
 import { exportBackup } from '../services/export.js'
 
 const recordsStore = useRecordsStore()
 const categoriesStore = useCategoriesStore()
 const { isListening, transcript, interimTranscript, isSupported, toggleListening } = useSpeech()
 
+// Parser status (simplified - no AI model loading needed)
+const parserStatus = {
+  status: 'ready',
+  message: '解析引擎就绪',
+  progress: 100
+}
+
 const inputRef = ref(null)
 const inputText = ref('')
 const parseResult = ref(null)
+const parseResults = ref([]) // For multiple items
 
 const weatherOptions = [
   { value: 'sunny', label: '晴天', icon: '☀️' },
@@ -347,6 +410,13 @@ const canSave = computed(() => {
   return parseResult.value.categoryId || parseResult.value.isNewCategory;
 })
 
+const canSaveMultiple = computed(() => {
+  if (parseResults.value.length === 0) return false;
+  return parseResults.value.every(item => 
+    item.amount > 0 && (item.categoryId || item.isNewCategory)
+  );
+})
+
 // Watch speech transcript
 watch(transcript, (val) => {
   if (val) {
@@ -363,9 +433,19 @@ async function handleParse() {
   if (!inputText.value.trim()) return
 
   const allCategories = categoriesStore.categories
-  const result = await parseInput(inputText.value, allCategories)
-
-  if (result) {
+  
+  // Try to parse multiple items first
+  const results = await parseMultipleItems(inputText.value, allCategories)
+  
+  if (results.length === 0) {
+    parseResult.value = null
+    parseResults.value = []
+    return
+  }
+  
+  if (results.length === 1) {
+    // Single item - use the original display logic
+    const result = results[0]
     // If no category matched and it's NOT marked as a new category, default to first expense category
     if (!result.categoryId && !result.isNewCategory) {
       const defaultCat = result.type === 'income'
@@ -377,6 +457,26 @@ async function handleParse() {
       }
     }
     parseResult.value = result
+    parseResults.value = []
+  } else {
+    // Multiple items - show all for batch saving
+    
+    // Apply default category logic to each item (same as single item)
+    // Only set default if: no categoryId AND not a new category
+    results.forEach((item) => {
+      if (!item.categoryId && !item.isNewCategory) {
+        const defaultCat = item.type === 'income'
+          ? categoriesStore.incomeCategories[0]
+          : categoriesStore.expenseCategories[0]
+        if (defaultCat) {
+          item.categoryId = defaultCat.id
+          item.categoryName = defaultCat.name
+        }
+      }
+    })
+    
+    parseResult.value = null
+    parseResults.value = results
   }
 }
 
@@ -393,8 +493,44 @@ function updateCategoryOptions() {
   }
 }
 
+function currentCategoriesForItem(item) {
+  if (!item) return [];
+  return item.type === 'income'
+    ? categoriesStore.incomeCategories
+    : categoriesStore.expenseCategories;
+}
+
+function updateItemCategory(item) {
+  const cats = item.type === 'income'
+    ? categoriesStore.incomeCategories
+    : categoriesStore.expenseCategories;
+  const selectedCat = cats.find(c => c.id === item.categoryId);
+  
+  if (selectedCat) {
+    // User selected an existing category
+    item.categoryName = selectedCat.name;
+    item.type = selectedCat.type;
+    item.isNewCategory = false;
+  } else if (item.categoryId === null && item.isNewCategory) {
+    // Keep the new category as is (when user selects the "新" option)
+    // Do nothing, preserve isNewCategory and categoryName
+  } else {
+    // User selected empty option, reset to default
+    item.isNewCategory = false;
+    item.categoryName = '';
+    const defaultCat = item.type === 'income'
+      ? categoriesStore.incomeCategories[0]
+      : categoriesStore.expenseCategories[0];
+    if (defaultCat) {
+      item.categoryId = defaultCat.id;
+      item.categoryName = defaultCat.name;
+    }
+  }
+}
+
 function clearParse() {
   parseResult.value = null
+  parseResults.value = []  // Clear multiple items array
   inputText.value = ''
   nextTick(() => inputRef.value?.focus())
 }
@@ -429,7 +565,43 @@ async function handleSave() {
     // Show success via toast (using provide/inject pattern later)
     clearParse()
   } catch (err) {
-    console.error('Save failed:', err)
+    // Silently handle save errors
+  }
+}
+
+async function handleSaveMultiple() {
+  if (!canSaveMultiple.value) return
+
+  try {
+    for (const item of parseResults.value) {
+      let categoryIdToSave = item.categoryId;
+      
+      // If it's a new category, create it first
+      if (item.isNewCategory) {
+        const newCategory = {
+          name: item.categoryName,
+          type: item.type,
+          icon: '✨',
+          color: '#94a3b8',
+          order: 99,
+          isDefault: 0
+        };
+        categoryIdToSave = await categoriesStore.addCategory(newCategory);
+      }
+
+      await recordsStore.addRecord({
+        type: item.type,
+        categoryId: categoryIdToSave,
+        amount: item.amount,
+        note: item.note,
+        date: item.date,
+        weather: item.weather || ''
+      });
+    }
+
+    clearParse();
+  } catch (err) {
+    // Silently handle batch save errors
   }
 }
 </script>
@@ -750,6 +922,79 @@ async function handleSave() {
   font-size: 0.85rem;
   margin-left: var(--space-xs);
   vertical-align: middle;
+}
+
+/* Multi Items Preview */
+.multi-items-preview {
+  margin-bottom: var(--space-xl);
+  border-color: var(--color-border-accent);
+}
+
+.multi-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.multi-item-card {
+  padding: var(--space-md);
+  background: var(--color-bg-input);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.multi-item-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.multi-item-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--gradient-primary);
+  color: #fff;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.multi-item-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.multi-item-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-sm);
+}
+
+.multi-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.multi-field label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.input-sm {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
 }
 
 @keyframes pulse-dot {

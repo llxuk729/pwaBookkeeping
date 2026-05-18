@@ -26,14 +26,7 @@ const {
   offlineReady,
   needRefresh,
   updateServiceWorker,
-} = useRegisterSW({
-  onRegistered(r) {
-    console.log('SW Registered')
-  },
-  onRegisterError(error) {
-    console.error('SW registration error', error)
-  }
-})
+} = useRegisterSW()
 
 const isUpdating = ref(false)
 

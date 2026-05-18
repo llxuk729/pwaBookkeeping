@@ -27,18 +27,28 @@ let currentCategories = [];
 let itemEmbeddings = [];
 let extractor = null;
 
+// Lazy loading flag
+let modelLoaded = false;
+
+/**
+ * Ensure model is loaded (lazy loading)
+ */
+async function ensureModelLoaded() {
+  if (modelLoaded) return;
+  
+  postMessage({ status: 'init', message: '正在加载AI模型...' });
+  extractor = await PipelineSingleton.getInstance(x => {
+    postMessage(x);
+  });
+  modelLoaded = true;
+  
+  postMessage({ status: 'ready' });
+}
+
 async function init() {
   try {
-    postMessage({ status: 'init', message: '正在加载 AI 模型...' });
-    extractor = await PipelineSingleton.getInstance(x => {
-      // We also hook into progress to report loading back to main thread
-      postMessage(x);
-    });
-    
-    postMessage({ status: 'init', message: 'AI 模型加载完成。' });
-    postMessage({ status: 'ready' });
-    
-    postMessage({ status: 'ready' });
+    // Don't auto-load model, just mark as ready for lazy loading
+    postMessage({ status: 'ready', message: 'AI模块就绪(按需加载)' });
   } catch (error) {
     postMessage({ status: 'error', error: error.message });
   }
@@ -67,6 +77,9 @@ self.addEventListener('message', async (event) => {
   }
 
   if (type === 'parse') {
+    // Lazy load model when parse is requested
+    await ensureModelLoaded();
+    
     if (!extractor) {
       postMessage({ id, status: 'error', error: 'AI模型尚未就绪' });
       return;
@@ -86,10 +99,23 @@ self.addEventListener('message', async (event) => {
       }
 
       // First, use regex to strip out numbers, dates and units to isolate the "item" part
+      // Improved cleaning logic to better extract item names
       let itemText = text
-        .replace(/\d+\.?\d*/g, '') // remove numbers
-        .replace(/号|元|块|钱|¥|￥/g, '') // remove units
-        .replace(/昨天|今天|前天|买|了|花费|支付/g, '') // remove common verbs/dates
+        // Remove complex currency patterns: "40块2毛8分", "40块2", etc.
+        .replace(/\d+\s*块\s*\d*\s*(?:毛|角)?\s*\d*\s*分?/g, '')
+        // Remove simple currency patterns: "40元", "¥40", "40块钱"
+        .replace(/(?:¥|￥)\s*\d+\.?\d*/g, '')
+        .replace(/\d+\.?\d*\s*(?:块|元|块钱)/g, '')
+        // Remove standalone numbers (amounts without currency units): "大米 4" -> "大米", "小米50" -> "小米"
+        .replace(/([\u4e00-\u9fa5])\s*(\d+\.?\d*)(?=\s*$|\s*[,，;；。.!！])/g, '$1')
+        .replace(/([\u4e00-\u9fa5])\s+(\d+\.?\d*)(?=\s*$|\s*[,，;；。.!！])/g, '$1')
+        .replace(/(\d+\.?\d*)\s*$/g, '')  // Fallback: remove trailing numbers
+        // Remove date patterns: "5.14号", "5月14日", "昨天", etc.
+        .replace(/\d{1,2}[./月-]\d{1,2}[号日]?/g, '')
+        .replace(/昨天|今天|前天/g, '')
+        // Remove common verbs and filler words
+        .replace(/买|了|花费|支付|消费|用掉|付/g, '')
+        // Clean up extra spaces
         .trim();
         
       if (!itemText) itemText = text; // Fallback if we stripped everything
@@ -98,10 +124,10 @@ self.addEventListener('message', async (event) => {
       const output = await extractor(itemText, { pooling: 'mean', normalize: true });
       const inputEmbedding = output.tolist()[0];
 
-      // Find the most similar known item
+      // Calculate embedding similarities using cosine similarity
       let bestMatch = null;
       let highestSimilarity = -1;
-
+      
       if (currentCategories.length > 0) {
         for (let i = 0; i < currentCategories.length; i++) {
           const sim = cosineSimilarity(inputEmbedding, itemEmbeddings[i]);
@@ -127,7 +153,8 @@ self.addEventListener('message', async (event) => {
         result: {
           matchedItem: bestMatch,
           similarity: highestSimilarity,
-          isNew: isNew
+          isNew: isNew,
+          cleanedText: itemText // Return the cleaned item text for better note extraction
         }
       });
     } catch (error) {

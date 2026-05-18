@@ -1,6 +1,17 @@
 import { reactive } from 'vue';
 
 /**
+ * @deprecated - This parser is deprecated and will be removed in v2.0
+ * Please use newParser.js instead which uses:
+ * - Tokenizer (jieba-wasm) for Chinese segmentation
+ * - Money FSM for robust amount parsing
+ * - Rule-based structured parsing
+ * - Valibot for schema validation
+ * 
+ * This file is kept as emergency fallback only.
+ */
+
+/**
  * AI + Rule-based Parser for Bookkeeping Input
  * Uses a Web Worker with Transformers.js for category extraction,
  * and regex for amount and date.
@@ -51,7 +62,6 @@ try {
   });
 
   aiWorker.addEventListener('error', (err) => {
-    console.error('[AI Worker] Runtime error:', err);
     aiState.status = 'error';
     aiState.error = err.message || 'Worker 运行时出错';
     aiState.message = 'AI 模块启动失败 (已启用本地解析)';
@@ -59,7 +69,6 @@ try {
 
   aiWorker.postMessage({ type: 'init' });
 } catch (e) {
-  console.error('[AI Worker] Creation failed:', e);
   aiState.status = 'error';
   aiState.error = e.message;
   aiState.message = 'AI 模块不可用 (已启用本地解析)';
@@ -67,6 +76,9 @@ try {
 
 // Income indicator keywords
 const incomeKeywords = ['收入', '到账', '入账', '收到', '进账', '收款', '退款'];
+
+// Common expense verbs (to help identify amount context)
+const expenseVerbs = ['花费', '花了', '用掉', '支付', '消费', '付了', '买了', '购买'];
 
 // Amount extraction patterns (ordered by priority)
 const amountPatterns = [
@@ -80,13 +92,26 @@ const amountPatterns = [
  */
 function extractDate(text) {
   // Match "5.14号", "5月14日", "5-14"
-  const dateMatch = text.match(/(\d{1,2})[./月-](\d{1,2})[号日]?/);
-  if (dateMatch) {
-    const month = parseInt(dateMatch[1], 10);
-    const day = parseInt(dateMatch[2], 10);
-    const year = new Date().getFullYear();
-    // Format to YYYY-MM-DD
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  // IMPORTANT: Must exclude patterns that look like amounts (e.g., "25.7")
+  // Strategy: Only match if followed by date indicators (号/日) or has specific separators
+  const datePatterns = [
+    /(\d{1,2})[月](\d{1,2})[日]?/,           // "5月14" or "5月14日"
+    /(\d{1,2})[./-](\d{1,2})[号日]/,         // "5.14号", "5-14日" (must have 号/日)
+  ];
+  
+  for (const pattern of datePatterns) {
+    const dateMatch = text.match(pattern);
+    if (dateMatch) {
+      const month = parseInt(dateMatch[1], 10);
+      const day = parseInt(dateMatch[2], 10);
+      
+      // Validate month and day ranges
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const year = new Date().getFullYear();
+        // Format to YYYY-MM-DD
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
   }
   
   if (text.includes('昨天')) {
@@ -103,40 +128,147 @@ function extractDate(text) {
 }
 
 /**
- * Extract Amount from string
+ * Extract Amount from string using hybrid approach
+ * Combines rule-based patterns with AI semantic understanding
  */
 function extractAmount(text) {
-  // First, try to match complex Chinese currency formats like "40块2毛8分" or "40块2"
-  // Pattern: X块Y毛Z分, where Y and Z are optional
-  const complexPattern = /(\d+)\s*块\s*(?:(\d+)\s*(?:毛|角))?\s*(?:(\d+)\s*分)?/;
-  const complexMatch = text.match(complexPattern);
+  // Strategy: Try multiple patterns in order of specificity
+  // Each pattern returns { amount, confidence, pattern }
   
-  if (complexMatch) {
-    const yuan = parseInt(complexMatch[1], 10) || 0;
-    const jiao = complexMatch[2] ? parseInt(complexMatch[2], 10) : 0;
-    const fen = complexMatch[3] ? parseInt(complexMatch[3], 10) : 0;
-    
-    // Convert to decimal: yuan + jiao/10 + fen/100
+  const candidates = [];
+  
+  // Pattern 1: Full format with units - "X块Y毛Z分"
+  const fullPattern = /(\d+)\s*块\s*(\d{1,2})\s*(?:毛|角)\s*(\d{1,2})\s*分?/;
+  const fullMatch = text.match(fullPattern);
+  if (fullMatch) {
+    const yuan = parseInt(fullMatch[1], 10);
+    const jiao = parseInt(fullMatch[2], 10);
+    const fen = parseInt(fullMatch[3], 10);
     const amount = yuan + (jiao / 10) + (fen / 100);
-    return parseFloat(amount.toFixed(2));
+    candidates.push({
+      amount: parseFloat(amount.toFixed(2)),
+      confidence: 0.95,
+      pattern: 'full',
+      match: fullMatch[0]
+    });
   }
   
-  // Then try standard patterns
-  for (const pattern of amountPatterns) {
-    const match = text.match(pattern);
+  // Pattern 2: With mao/jiao only - "X块Y毛"
+  const maoPattern = /(\d+)\s*块\s*(\d{1,2})\s*(?:毛|角)/;
+  const maoMatch = text.match(maoPattern);
+  if (maoMatch) {
+    const yuan = parseInt(maoMatch[1], 10);
+    const jiao = parseInt(maoMatch[2], 10);
+    const amount = yuan + (jiao / 10);
+    candidates.push({
+      amount: parseFloat(amount.toFixed(2)),
+      confidence: 0.9,
+      pattern: 'mao',
+      match: maoMatch[0]
+    });
+  }
+  
+  // Pattern 3: With fen only - "X块Z分"
+  const fenPattern = /(\d+)\s*块\s*(\d{1,2})\s*分/;
+  const fenMatch = text.match(fenPattern);
+  if (fenMatch) {
+    const yuan = parseInt(fenMatch[1], 10);
+    const fen = parseInt(fenMatch[2], 10);
+    const amount = yuan + (fen / 100);
+    candidates.push({
+      amount: parseFloat(amount.toFixed(2)),
+      confidence: 0.85,
+      pattern: 'fen',
+      match: fenMatch[0]
+    });
+  }
+  
+  // Pattern 4: Currency symbols - "¥35", "35元"
+  const currencyPatterns = [
+    { regex: /(\d+\.?\d*)\s*(块|元|块钱)/, name: 'yuan_unit' },
+    { regex: /(¥|￥)\s*(\d+\.?\d*)/, name: 'currency_symbol' }
+  ];
+  
+  for (const cp of currencyPatterns) {
+    const match = text.match(cp.regex);
     if (match) {
-      const numStr = match[2] && !isNaN(match[2]) ? match[2] : match[1];
-      const num = parseFloat(numStr);
-      if (num > 0 && num < 10000000) {
-        return num;
+      const numStr = cp.name === 'currency_symbol' ? match[2] : match[1];
+      const amount = parseFloat(numStr);
+      if (amount > 0 && amount < 10000000) {
+        candidates.push({
+          amount: parseFloat(amount.toFixed(2)),
+          confidence: 0.88,
+          pattern: cp.name,
+          match: match[0]
+        });
+        break; // Only take the first currency pattern match
       }
     }
   }
   
-  // Try to find any standalone number if previous failed
-  const standaloneMatch = text.match(/(\d+\.?\d*)/);
+  // Pattern 5: No units after "块" - "X块Y" 
+  // Ambiguous case: could be "X.Y yuan" or "X yuan Y fen"
+  // Heuristic: If Y is 1-9, treat as jiao (0.Y); if Y is 10-99, treat as fen (0.0Y)
+  // Examples:
+  // - "12块4" -> 12.4 (4 is single digit, likely jiao)
+  // - "4块23" -> 4.23 (23 is two digits, likely fen)
+  const noUnitPattern = /(\d+)\s*块\s*(\d{1,2})(?!\s*(?:毛|角|分|块|元))/;
+  const noUnitMatch = text.match(noUnitPattern);
+  if (noUnitMatch) {
+    const yuan = parseInt(noUnitMatch[1], 10);
+    const suffix = parseInt(noUnitMatch[2], 10);
+    
+    let amount;
+    let explanation;
+    
+    if (suffix >= 10) {
+      // Two-digit number: treat as fen (cents)
+      // "4块23" -> 4.23
+      amount = yuan + (suffix / 100);
+      explanation = `${suffix} as fen (0.${suffix})`;
+    } else {
+      // Single digit: treat as jiao (dimes)
+      // "12块4" -> 12.4
+      amount = yuan + (suffix / 10);
+      explanation = `${suffix} as jiao (0.${suffix})`;
+    }
+    
+    candidates.push({
+      amount: parseFloat(amount.toFixed(2)),
+      confidence: 0.75, // Lower confidence because it's ambiguous
+      pattern: 'no_unit',
+      match: noUnitMatch[0],
+      explanation: explanation
+    });
+  }
+  
+  // Pattern 6: Standalone number at end - "大豆 123"
+  const standalonePattern = /[\u4e00-\u9fa5\s]+(\d+\.?\d*)\s*$/;
+  const standaloneMatch = text.match(standalonePattern);
   if (standaloneMatch) {
-    return parseFloat(standaloneMatch[1]);
+    const amount = parseFloat(standaloneMatch[1]);
+    if (amount > 0 && amount < 10000000) {
+      candidates.push({
+        amount: parseFloat(amount.toFixed(2)),
+        confidence: 0.7,
+        pattern: 'standalone',
+        match: standaloneMatch[1]
+      });
+    }
+  }
+  
+  // Select the best candidate based on confidence and position
+  if (candidates.length > 0) {
+    // Sort by confidence (descending), then by position in text (ascending)
+    candidates.sort((a, b) => {
+      if (b.confidence !== a.confidence) {
+        return b.confidence - a.confidence;
+      }
+      return text.indexOf(a.match) - text.indexOf(b.match);
+    });
+    
+    const best = candidates[0];
+    return best.amount;
   }
   
   return null;
@@ -168,6 +300,93 @@ function ruleBasedCategoryMatch(text, categories) {
 }
 
 /**
+ * Lightweight semantic analysis for bookkeeping text
+ * Identifies: item name, amount, date, type without heavy AI models
+ */
+function analyzeBookkeepingText(text) {
+  const result = {
+    itemName: '',
+    amount: null,
+    hasAmount: false,
+    hasDate: false,
+    type: 'expense'
+  };
+
+  // 1. Detect income/expense type
+  if (incomeKeywords.some(kw => text.includes(kw))) {
+    result.type = 'income';
+  }
+
+  // 2. Check if text has expense verbs
+  const hasExpenseVerb = expenseVerbs.some(verb => text.includes(verb));
+
+  // 3. Extract amount
+  const amount = extractAmount(text);
+  if (amount !== null) {
+    result.amount = amount;
+    result.hasAmount = true;
+  }
+
+  // 4. Extract date
+  const date = extractDate(text);
+  if (date !== new Date().toISOString().split('T')[0]) {
+    result.hasDate = true;
+  }
+
+  // 5. Extract item name (Chinese characters before the amount)
+  // Pattern: "大豆 123" -> "大豆"
+  // Pattern: "买大米花了50" -> "大米"
+  // Pattern: "小米5" -> "小米"
+  let cleanText = text
+    // Remove complex currency patterns first (highest priority)
+    .replace(/\d+\s*块\s*\d*\s*(?:毛|角)?\s*\d*\s*分?/g, '')  // "40块2毛8分"
+    // Remove amounts with currency units
+    .replace(/\d+\.?\d*\s*(?:块|元|块钱)/g, '')  // "35块", "35元"
+    .replace(/(?:¥|￥)\s*\d+\.?\d*/g, '')  // "¥35"
+    // Remove standalone numbers that are likely amounts
+    // Match: Chinese + optional space + number (at end or followed by space/punctuation)
+    .replace(/([\u4e00-\u9fa5])\s*(\d+\.?\d*)(?=\s*$|\s*[,，;；。.!！])/g, '$1')  // "小米5" -> "小米", "大米 4," -> "大米"
+    .replace(/([\u4e00-\u9fa5])\s+(\d+\.?\d*)(?=\s*$|\s*[,，;；。.!！])/g, '$1')  // "大豆 123" -> "大豆"
+    // Also handle numbers at the very end of text
+    .replace(/([\u4e00-\u9fa5])\s*(\d+\.?\d*)\s*$/g, '$1')  // Fallback for end of string
+    // Remove date patterns
+    .replace(/\d{1,2}[./月-]\d{1,2}[号日]?/g, '')
+    .replace(/昨天|今天|前天/g, '')
+    // Remove verbs
+    .replace(new RegExp(expenseVerbs.join('|'), 'g'), '')
+    .replace(/[花费了用掉付支付消费买购买]/g, '')
+    .trim();
+
+  // Clean up extra spaces and punctuation
+  cleanText = cleanText.replace(/[，,;；。.!！]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  if (cleanText) {
+    result.itemName = cleanText;
+  }
+
+  return result;
+}
+
+/**
+ * Split input text into multiple items
+ * Supports patterns like: "小米5块，大米10块" or "小米5块 大米10块"
+ */
+function splitMultipleItems(text) {
+  // Split by common separators: comma, semicolon
+  // For space separator: only split if followed by Chinese characters (new item name)
+  // NOT if followed by a number (which is likely an amount for the current item)
+  // 
+  // Examples:
+  // - "大米 4，小米50" → ["大米 4", "小米50"] ✅ (comma separator)
+  // - "玉米 46块8毛3" → ["玉米 46块8毛3"] ✅ (space before number, not split)
+  // - "小米5块 大米10块" → ["小米5块", "大米10块"] ✅ (space before Chinese char)
+  const separators = /[,，;；]|\s+(?=[\u4e00-\u9fa5])/;
+  const parts = text.split(separators).filter(part => part.trim());
+  
+  return parts;
+}
+
+/**
  * Parse natural language input to extract bookkeeping information
  * @param {string} input - Natural language input text
  * @param {Array} categories - Available categories from database
@@ -180,7 +399,7 @@ export async function parseInput(input, categories = []) {
 
   const text = input.trim();
   if (!text) return null;
-
+  
   const result = {
     amount: extractAmount(text),
     categoryId: null,
@@ -197,11 +416,16 @@ export async function parseInput(input, categories = []) {
     result.type = 'income';
   }
 
-  // 2. Clean up note - remove amount and date related text
-  let note = text
+  // 2. Use lightweight semantic analysis to extract item name
+  const semanticAnalysis = analyzeBookkeepingText(text);
+  
+  // 3. Clean up note - use semantic analysis result if available, otherwise fallback to regex
+  let note = semanticAnalysis.itemName || text
     .replace(/[花费了用掉付支付消费]*\s*\d+\.?\d*\s*(块|元|¥|￥)?/g, '')
     .replace(/(¥|￥)\s*\d+\.?\d*/g, '')
     .replace(/\d+\.?\d*\s*(块|元)/g, '')
+    // 新增：清理复杂货币格式，如 "40块2" 或 "40块2毛8分"
+    .replace(/\d+\s*块\s*\d*\s*(?:毛|角)?\s*\d*\s*分?/g, '')
     .replace(/\d{1,2}[./月-]\d{1,2}[号日]?/g, '')
     .replace(/昨天|今天|前天/g, '')
     .trim();
@@ -210,7 +434,7 @@ export async function parseInput(input, categories = []) {
     result.note = note;
   }
 
-  // 3. Category match (AI with 3s Timeout or Rule-based fallback)
+  // 4. Category match (AI with 3s Timeout or Rule-based fallback)
   let matchedCategory = null;
   let isNewCategory = false;
   let categoryName = null;
@@ -249,13 +473,19 @@ export async function parseInput(input, categories = []) {
         categoryName = aiMatchedName;
         matchedCategory = categories.find(c => c.name === aiMatchedName);
       }
+      
+      // Use AI's cleaned text for better note extraction (fallback to semantic analysis)
+      if (aiResult.cleanedText && aiResult.cleanedText !== text) {
+        result.note = aiResult.cleanedText;
+      } else if (semanticAnalysis.itemName) {
+        // If AI didn't provide cleaned text, use our lightweight semantic analysis
+        result.note = semanticAnalysis.itemName;
+      }
     } catch (error) {
-      console.warn('AI Parser failed or timed out, falling back to rule-based matching:', error);
       matchedCategory = ruleBasedCategoryMatch(result.note, categories);
     }
   } else {
     // Elegant degradation: Rule-based parsing
-    console.log('AI model not ready or error. Utilizing rule-based fallback.');
     matchedCategory = ruleBasedCategoryMatch(result.note, categories);
   }
 
@@ -274,4 +504,43 @@ export async function parseInput(input, categories = []) {
   }
 
   return result;
+}
+
+/**
+ * Parse multiple items from a single input
+ * @param {string} input - Natural language input text with multiple items
+ * @param {Array} categories - Available categories from database
+ * @returns {Promise<Array>} Array of parsed results
+ */
+export async function parseMultipleItems(input, categories = []) {
+  if (!input || typeof input !== 'string') {
+    return [];
+  }
+
+  const text = input.trim();
+  if (!text) return [];
+
+  // Split into multiple items
+  const items = splitMultipleItems(text);
+  
+  // If only one item, use the original parseInput
+  if (items.length <= 1) {
+    const result = await parseInput(text, categories);
+    return result ? [result] : [];
+  }
+
+  // Parse each item separately
+  const results = [];
+  for (const item of items) {
+    try {
+      const result = await parseInput(item, categories);
+      if (result) {
+        results.push(result);
+      }
+    } catch (error) {
+      // Silently skip failed items
+    }
+  }
+
+  return results;
 }
