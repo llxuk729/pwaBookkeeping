@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: './', // Use relative paths for built assets
+  base: '/pwaBookkeeping/', // Set base to repo name for GitHub Pages
   plugins: [
     vue(),
     VitePWA({
@@ -16,8 +16,8 @@ export default defineConfig({
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',
         display: 'standalone',
-        scope: '/',
-        start_url: '/',
+        scope: '/pwaBookkeeping/',
+        start_url: '/pwaBookkeeping/',
         icons: [
           {
             src: '/icons/icon-192.png',
