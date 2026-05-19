@@ -54,6 +54,27 @@
       </div>
     </div>
 
+    <!-- Voice Settings -->
+    <div class="settings-section">
+      <div class="section-header"><span class="section-title">语音设置</span></div>
+      <div class="card settings-card">
+        <div class="setting-item">
+          <span class="setting-icon">🎤</span>
+          <div class="setting-content">
+            <div class="setting-title">麦克风权限</div>
+            <div class="setting-desc">{{ micPermissionStatus }}</div>
+          </div>
+          <button 
+            class="btn btn-sm" 
+            :class="micPermissionStatus === '已授予' ? 'btn-ghost' : 'btn-primary'"
+            @click="checkAndRequestMicPermission"
+            :disabled="checkingPermission">
+            {{ checkingPermission ? '检查中...' : (micPermissionStatus === '已授予' ? '已授权' : '请求权限') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Statistics -->
     <div class="settings-section">
       <div class="section-header"><span class="section-title">数据概览</span></div>
@@ -111,6 +132,7 @@ import { useRecordsStore } from '../stores/records.js'
 import { useCategoriesStore } from '../stores/categories.js'
 import { exportToCSV, exportBackup, importBackup } from '../services/export.js'
 import { db, initializeDB } from '../db/database.js'
+import { checkMicrophonePermission, requestMicrophonePermission } from '../speech-engine/platform-detect.js'
 import pkg from '../../package.json'
 
 const recordsStore = useRecordsStore()
@@ -118,10 +140,61 @@ const categoriesStore = useCategoriesStore()
 const fileInputRef = ref(null)
 
 const isDarkTheme = ref(false)
+const micPermissionStatus = ref('未知')
+const checkingPermission = ref(false)
 
 onMounted(() => {
   isDarkTheme.value = document.documentElement.classList.contains('dark')
+  checkMicPermissionStatus()
 })
+
+async function checkMicPermissionStatus() {
+  const status = await checkMicrophonePermission()
+  switch (status) {
+    case 'granted':
+      micPermissionStatus.value = '已授予'
+      break
+    case 'denied':
+      micPermissionStatus.value = '已拒绝'
+      break
+    case 'prompt':
+      micPermissionStatus.value = '未决定'
+      break
+    default:
+      micPermissionStatus.value = '无法检测'
+  }
+}
+
+async function checkAndRequestMicPermission() {
+  checkingPermission.value = true
+  try {
+    // First check current status
+    await checkMicPermissionStatus()
+    
+    // If not granted, try to request
+    if (micPermissionStatus.value !== '已授予') {
+      const success = await requestMicrophonePermission()
+      if (success) {
+        micPermissionStatus.value = '已授予'
+        alert('麦克风权限已成功授予！')
+      } else {
+        // Check again to get updated status
+        await checkMicPermissionStatus()
+        if (micPermissionStatus.value === '已拒绝') {
+          alert('麦克风权限被拒绝。请在浏览器设置中手动允许访问麦克风。\n\n操作步骤：\n1. 点击地址栏左侧的锁图标\n2. 找到“麦克风”权限\n3. 设置为“允许”\n4. 刷新页面')
+        } else {
+          alert('无法获取麦克风权限。请确保：\n1. 使用 HTTPS 或 localhost 访问\n2. 设备有麦克风\n3. 没有其他应用占用麦克风')
+        }
+      }
+    } else {
+      alert('麦克风权限已授予，可以正常使用语音功能。')
+    }
+  } catch (err) {
+    alert('检查权限时出错: ' + err.message)
+  } finally {
+    checkingPermission.value = false
+  }
+}
 
 function setTheme(theme) {
   if (theme === 'dark') {

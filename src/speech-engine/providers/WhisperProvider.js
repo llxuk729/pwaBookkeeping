@@ -128,7 +128,11 @@ export class WhisperProvider extends SpeechProvider {
     try {
       const hasPermission = await requestMicrophonePermission()
       if (!hasPermission) {
-        throw new Error('麦克风权限被拒绝')
+        // Check if we're in a secure context
+        if (!window.isSecureContext) {
+          throw new Error('需要在 HTTPS 或 localhost 环境下才能使用麦克风')
+        }
+        throw new Error('麦克风权限被拒绝。请在浏览器设置中允许访问麦克风，或在系统设置中检查应用权限。')
       }
 
       // Get audio stream

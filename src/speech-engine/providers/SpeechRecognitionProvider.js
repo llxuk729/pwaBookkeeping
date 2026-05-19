@@ -65,6 +65,12 @@ export class SpeechRecognitionProvider extends SpeechProvider {
   }
 
   async _doInitialize() {
+    // Check if we're in a secure context
+    if (!window.isSecureContext) {
+      this._status = EngineStatus.ERROR
+      throw new Error('需要在 HTTPS 或 localhost 环境下才能使用麦克风')
+    }
+    
     // Request microphone permission first
     const hasPermission = await requestMicrophonePermission()
     if (!hasPermission) {
@@ -72,7 +78,7 @@ export class SpeechRecognitionProvider extends SpeechProvider {
       if (isIOSPWA()) {
         throw new Error('iOS PWA 不支持 Web Speech API，请使用 Whisper 引擎或在 Safari 中打开')
       }
-      throw new Error('麦克风权限被拒绝')
+      throw new Error('麦克风权限被拒绝。请在浏览器设置中允许访问麦克风，或在系统设置中检查应用权限。')
     }
 
     // Create SpeechRecognition instance
