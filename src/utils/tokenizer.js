@@ -1,7 +1,6 @@
 /**
  * Tokenizer - 中文分词与文本切分
  * 
- * Note: jieba-wasm has compatibility issues in browser dev environment.
  * Using simple regex-based tokenization as primary method for now.
  * Can be enhanced with server-side preprocessing or alternative libraries later.
  */

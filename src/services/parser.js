@@ -2,8 +2,7 @@ import { reactive } from 'vue';
 
 /**
  * @deprecated - This parser is deprecated and will be removed in v2.0
- * Please use newParser.js instead which uses:
- * - Tokenizer (jieba-wasm) for Chinese segmentation
+ * Please use newParser.js instead which uses: 
  * - Money FSM for robust amount parsing
  * - Rule-based structured parsing
  * - Valibot for schema validation
