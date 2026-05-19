@@ -1,13 +1,15 @@
 {
   "name": "pwabookkeeping",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "download-model": "node scripts/download_model.js",
+    "download-whisper": "node scripts/download_whisper.js",
+    "download-all": "npm run download-model && npm run download-whisper",
     "generate-icons": "node scripts/generate_icons.js"
   },
   "dependencies": {
