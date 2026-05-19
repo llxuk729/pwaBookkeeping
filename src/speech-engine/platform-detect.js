@@ -87,22 +87,6 @@ export function hasSpeechRecognition() {
 }
 
 /**
- * Check if MediaRecorder is available (required for Whisper)
- * @returns {boolean}
- */
-export function hasMediaRecorder() {
-  return !!window.MediaRecorder
-}
-
-/**
- * Check if WebAudio API is available
- * @returns {boolean}
- */
-export function hasWebAudio() {
-  return !!window.AudioContext || !!window.webkitAudioContext
-}
-
-/**
  * Check microphone permission status
  * @returns {Promise<'granted' | 'denied' | 'prompt' | 'unknown'>}
  */

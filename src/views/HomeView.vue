@@ -43,7 +43,7 @@
         </div>
         <!-- Speech engine status -->
         <span v-if="isListening || speechProgress > 0" class="speech-status-badge">
-          {{ isUsingWhisper ? 'Whisper' : 'Speech' }}
+          Speech
         </span>
         <span v-else class="speech-status-placeholder"></span>
       </div>
@@ -55,7 +55,7 @@
       </div>
 
       <div class="input-row">
-        <input ref="inputRef" v-model="inputText" class="input input-lg quick-input" placeholder="输入记账内容，如：黄小米35"
+        <input ref="inputRef" v-model="inputText" class="input input-lg quick-input" placeholder="示例：黄小米35"
           @keyup.enter="handleParse" @input="handleInputChange" id="input-text" />
         <button class="btn btn-icon voice-btn" 
           :class="{ 'voice-active': isListening }"
@@ -64,7 +64,7 @@
           @pointercancel="handleVoiceButtonCancel"
           @pointerleave="handleVoiceButtonCancel"
           @click="handleVoiceButtonClick"
-          v-if="isSupported" 
+          v-if="showVoiceButton" 
           id="voice-btn" 
           :title="isListening ? '松开结束录音' : '按住说话录音'">
           <span class="voice-icon">🎤</span>
@@ -79,6 +79,11 @@
       <div v-if="interimTranscript" class="interim-text">
         <span class="interim-indicator">●</span>
         {{ interimTranscript }}
+      </div>
+
+      <!-- Voice hint for unsupported devices -->
+      <div v-if="!showVoiceButton" class="voice-hint">
+        💡 使用键盘语音输入更快哟～
       </div>
     </div>
 
@@ -273,13 +278,34 @@ const {
   status: speechStatus,
   progress: speechProgress,
   activeProvider,
-  isUsingWhisper,
   statusMessage,
   startListening,
   stopListening,
   abortListening,
   getPlatformInfo
 } = useSpeech()
+
+// Determine if voice button should be shown
+// Show only on Windows browser and Android browser (not PWA)
+const showVoiceButton = computed(() => {
+  const platformInfo = getPlatformInfo()
+  if (!platformInfo) return false
+  
+  const { platform, isPWA } = platformInfo
+  
+  // Windows browser (not PWA)
+  if (platform === 'windows' && !isPWA) {
+    return true
+  }
+  
+  // Android browser (not PWA)
+  if (platform === 'android' && !isPWA) {
+    return true
+  }
+  
+  // All other cases: Mac, iPhone, Android PWA - hide voice button
+  return false
+})
 
 
 // Parser status (simplified - no AI model loading needed)
@@ -800,6 +826,17 @@ async function handleSaveMultiple() {
   color: var(--color-danger);
   animation: pulse-dot 1s infinite;
   margin-right: var(--space-xs);
+}
+
+/* Voice hint for unsupported devices */
+.voice-hint {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: center;
 }
 
 /* Parse Preview */

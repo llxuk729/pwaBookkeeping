@@ -98,30 +98,28 @@ export class SpeechProvider {
  */
 export const SpeechEngineConfig = {
   // Provider priorities by platform
-  android: ['speech-recognition', 'whisper'],
-  ios: ['whisper'], // iOS PWA doesn't support SpeechRecognition well
+  android: ['speech-recognition'],
+  ios: [], // iOS PWA doesn't support SpeechRecognition
   desktop: ['speech-recognition'],
-  fallback: ['whisper']
+  fallback: []
 }
 
 /**
  * Provider Types
  */
 export const ProviderType = {
-  SPEECH_RECOGNITION: 'speech-recognition',
-  WHISPER: 'whisper'
+  SPEECH_RECOGNITION: 'speech-recognition'
 }
 
 /**
  * Engine Status
+ * 简化的引擎状态（仅Web Speech API）
  */
 export const EngineStatus = {
-  IDLE: 'idle',
-  LOADING: 'loading',
-  READY: 'ready',
-  LISTENING: 'listening',
-  PROCESSING: 'processing',
-  ERROR: 'error'
+  IDLE: 'idle',           // 空闲
+  READY: 'ready',         // 就绪
+  LISTENING: 'listening', // 监听中
+  ERROR: 'error'          // 错误
 }
 
 /**

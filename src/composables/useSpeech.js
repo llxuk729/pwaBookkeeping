@@ -1,15 +1,14 @@
 import { ref, onUnmounted, computed } from 'vue'
-import { createSpeechEngine, EngineStatus, ProviderType, isIOSPWA, hasSpeechRecognition, hasMediaRecorder } from '../speech-engine/index.js'
-import { detectPlatform, isPWAMode } from '../speech-engine/platform-detect.js'
+import { hasSpeechRecognition, requestMicrophonePermission, detectPlatform, isPWAMode } from '../speech-engine/platform-detect.js'
 
 /**
  * Vue Composable for Speech Recognition
- * 使用双引擎架构的语音识别 Composable
+ * 使用 Web Speech API 的语音识别 Composable
  * 
  * 特点：
- * - Android: 优先 SpeechRecognition，失败 fallback 到 Whisper
- * - iOS PWA: 直接使用 Whisper
+ * - 仅支持 Windows 和 Android 浏览器（非 PWA 模式）
  * - 支持按住说话模式
+ * - 轻量级实现，无额外依赖
  */
 export function useSpeech() {
   // State
@@ -17,119 +16,164 @@ export function useSpeech() {
   const transcript = ref('')
   const interimTranscript = ref('')
   const error = ref(null)
-  const status = ref(EngineStatus.IDLE)
-  const progress = ref(0)
-  const activeProvider = ref(null)
+  const status = ref('idle') // idle, ready, listening, error
   const isInitialized = ref(false)
 
-  // Engine instance
-  let engine = null
+  // SpeechRecognition instance
+  let recognition = null
+  let finalTranscript = ''
+  let interimTranscriptBuffer = ''
 
   // Sync check support status immediately (for button visibility)
-  // 同步检测支持状态（用于按钮显示）
-  // SpeechRecognition 或 MediaRecorder 任一可用即支持
-  const isSupported = ref(hasSpeechRecognition() || hasMediaRecorder())
+  const isSupported = ref(hasSpeechRecognition())
 
   /**
    * Initialize the speech engine
-   * Lazy initialization - only when needed
    */
-  async function initializeEngine(onProgress = null) {
-    if (engine) return engine
+  async function initializeEngine() {
+    if (recognition) return true
 
     try {
-      engine = createSpeechEngine({
-        autoSelect: true,
-        lang: 'zh-CN'
-      })
-
-      // Double check support after engine creation
-      if (!engine.isSupported()) {
+      // Check if supported
+      if (!hasSpeechRecognition()) {
         isSupported.value = false
         error.value = '当前平台不支持语音识别功能'
-        return null
+        return false
       }
 
-      // Actually initialize the engine (this may download models for Whisper)
-      await engine.initialize(null, onProgress)
+      // Check secure context
+      if (!window.isSecureContext) {
+        throw new Error('需要在 HTTPS 或 localhost 环境下才能使用麦克风')
+      }
+
+      // Request microphone permission
+      const hasPermission = await requestMicrophonePermission()
+      if (!hasPermission) {
+        throw new Error('麦克风权限被拒绝。请在浏览器设置中允许访问麦克风。')
+      }
+
+      // Create SpeechRecognition instance
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      recognition = new SpeechRecognition()
+      recognition.lang = 'zh-CN'
+      recognition.continuous = false
+      recognition.interimResults = true
+      recognition.maxAlternatives = 1
+
+      // Set up event handlers
+      setupEventHandlers()
+
       isInitialized.value = true
-      activeProvider.value = engine.getActiveProviderName()
-      status.value = EngineStatus.READY
+      status.value = 'ready'
+      return true
     } catch (err) {
       error.value = err.message || '语音引擎初始化失败'
-      status.value = EngineStatus.ERROR
-      engine = null // Reset engine on failure
-      return null
+      status.value = 'error'
+      recognition = null
+      return false
+    }
+  }
+
+  /**
+   * Set up event handlers
+   */
+  function setupEventHandlers() {
+    if (!recognition) return
+
+    recognition.onresult = (event) => {
+      let interim = ''
+      let final = ''
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i]
+        if (result.isFinal) {
+          final += result[0].transcript
+        } else {
+          interim += result[0].transcript
+        }
+      }
+
+      if (final) {
+        finalTranscript = final
+        interimTranscriptBuffer = ''
+        transcript.value = final
+        interimTranscript.value = ''
+      } else {
+        interimTranscriptBuffer = interim
+        interimTranscript.value = interim
+      }
     }
 
-    return engine
+    recognition.onerror = (event) => {
+      isListening.value = false
+      status.value = 'error'
+
+      let errorMessage = ''
+      switch (event.error) {
+        case 'not-allowed':
+          errorMessage = '麦克风权限被拒绝'
+          break
+        case 'no-speech':
+          errorMessage = '未检测到语音输入'
+          break
+        case 'network':
+          errorMessage = '网络错误，语音识别需要网络支持'
+          break
+        case 'audio-capture':
+          errorMessage = '无法访问麦克风'
+          break
+        case 'aborted':
+          errorMessage = '语音识别已取消'
+          break
+        case 'service-not-allowed':
+          errorMessage = '当前环境不支持语音识别服务'
+          break
+        default:
+          errorMessage = `语音识别错误: ${event.error}`
+      }
+
+      error.value = errorMessage
+    }
+
+    recognition.onend = () => {
+      isListening.value = false
+      if (status.value === 'listening') {
+        status.value = 'ready'
+      }
+    }
+
+    recognition.onstart = () => {
+      isListening.value = true
+      status.value = 'listening'
+    }
   }
 
   /**
    * Start listening (按住说话模式)
-   * @param {Object} options
-   * @param {function(number)} options.onProgress - Loading progress callback
    */
-  async function startListening(options = {}) {
+  async function startListening() {
     error.value = null
     transcript.value = ''
     interimTranscript.value = ''
+    finalTranscript = ''
+    interimTranscriptBuffer = ''
 
     // Initialize engine if needed
-    if (!engine) {
-      const initializedEngine = await initializeEngine(options.onProgress)
-      if (!initializedEngine) {
+    if (!recognition) {
+      const success = await initializeEngine()
+      if (!success) {
         return
       }
     }
 
-    // iOS PWA special handling
-    if (isIOSPWA() && !isInitialized.value) {
-      // First time on iOS PWA - warn about model download
-      const proceed = confirm(
-        'iOS PWA 将使用本地语音识别引擎（Whisper），首次使用需要下载模型约 40MB。\n\n' +
-        '下载完成后可离线使用。\n\n' +
-        '是否继续？'
-      )
-      if (!proceed) return
-    }
-
+    // Start listening
     try {
-      status.value = EngineStatus.LISTENING
-      isListening.value = true
-
-      await engine.start({
-        onInterim: (text, isFinal) => {
-          if (!isFinal) {
-            interimTranscript.value = text
-          }
-        },
-        onFinal: (text) => {
-          transcript.value = text
-          interimTranscript.value = ''
-          isListening.value = false
-          status.value = EngineStatus.READY
-        },
-        onError: (err) => {
-          error.value = err.message
-          isListening.value = false
-          status.value = EngineStatus.ERROR
-        },
-        onProgress: (p) => {
-          progress.value = p
-          if (options.onProgress) {
-            options.onProgress(p)
-          }
-        }
-      })
-
-      activeProvider.value = engine.getActiveProviderName()
-      status.value = engine.getStatus()
-
-    } catch (err) {
-      error.value = err.message
-      isListening.value = false
-      status.value = EngineStatus.ERROR
+      recognition.start()
+    } catch (e) {
+      if (e.name !== 'InvalidStateError') {
+        throw e
+      }
+      // Already started, ignore
     }
   }
 
@@ -138,20 +182,17 @@ export function useSpeech() {
    * 松开按钮时调用
    */
   async function stopListening() {
-    if (!engine || !isListening.value) return
+    if (!recognition || !isListening.value) return
 
     try {
-      const result = await engine.stop()
-      if (result) {
-        transcript.value = result
-      }
+      recognition.stop()
       isListening.value = false
-      status.value = EngineStatus.READY
+      status.value = 'ready'
       interimTranscript.value = ''
     } catch (err) {
       error.value = err.message
       isListening.value = false
-      status.value = EngineStatus.ERROR
+      status.value = 'error'
     }
   }
 
@@ -159,13 +200,15 @@ export function useSpeech() {
    * Abort current session
    */
   function abortListening() {
-    if (engine) {
-      engine.abort()
+    if (recognition) {
+      recognition.abort()
     }
     isListening.value = false
-    status.value = EngineStatus.READY
+    status.value = 'ready'
     transcript.value = ''
     interimTranscript.value = ''
+    finalTranscript = ''
+    interimTranscriptBuffer = ''
     error.value = null
   }
 
@@ -173,11 +216,11 @@ export function useSpeech() {
    * Toggle listening (click mode - optional)
    * 按钮点击模式（可选）
    */
-  async function toggleListening(options = {}) {
+  async function toggleListening() {
     if (isListening.value) {
       await stopListening()
     } else {
-      await startListening(options)
+      await startListening()
     }
   }
 
@@ -185,12 +228,10 @@ export function useSpeech() {
    * Preload the engine (optional)
    * 预加载引擎（可选，减少首次使用等待时间）
    */
-  async function preloadEngine(onProgress) {
-    if (!engine) {
-      const initializedEngine = await initializeEngine(onProgress)
-      return !!initializedEngine
+  async function preloadEngine() {
+    if (!recognition) {
+      return await initializeEngine()
     }
-
     return true
   }
 
@@ -198,45 +239,25 @@ export function useSpeech() {
    * Get platform info
    */
   function getPlatformInfo() {
-    if (engine) {
-      return engine.getPlatformInfo()
-    }
-    
-    // Return basic platform info even without engine
     return {
       platform: detectPlatform(),
       isPWA: isPWAMode(),
-      isIOSPWA: isIOSPWA(),
-      activeProvider: null,
-      fallbackChain: []
+      activeProvider: recognition ? 'speech-recognition' : null
     }
   }
-
-  /**
-   * Check if using Whisper engine
-   */
-  const isUsingWhisper = computed(() => {
-    return activeProvider.value === ProviderType.WHISPER
-  })
 
   /**
    * Get user-friendly status message
    */
   const statusMessage = computed(() => {
     switch (status.value) {
-      case EngineStatus.IDLE:
+      case 'idle':
         return '准备就绪'
-      case EngineStatus.LOADING:
-        return progress.value > 0 
-          ? `加载模型 ${progress.value}%` 
-          : '初始化中...'
-      case EngineStatus.READY:
+      case 'ready':
         return '就绪'
-      case EngineStatus.LISTENING:
+      case 'listening':
         return '录音中...'
-      case EngineStatus.PROCESSING:
-        return '识别中...'
-      case EngineStatus.ERROR:
+      case 'error':
         return '错误'
       default:
         return ''
@@ -244,10 +265,10 @@ export function useSpeech() {
   })
 
   // Cleanup on unmount
-  onUnmounted(async () => {
-    if (engine) {
-      await engine.destroy()
-      engine = null
+  onUnmounted(() => {
+    if (recognition) {
+      recognition.abort()
+      recognition = null
     }
   })
 
@@ -259,12 +280,9 @@ export function useSpeech() {
     isSupported,
     error,
     status,
-    progress,
-    activeProvider,
     isInitialized,
     
     // Computed
-    isUsingWhisper,
     statusMessage,
     
     // Methods
