@@ -49,7 +49,9 @@
       </div>
       <div class="category-legend">
         <div v-for="item in categoryBreakdown" :key="item.name" class="legend-item">
-          <span class="legend-dot" :style="{ background: item.color }"></span>
+          <div class="legend-dot-wrapper">
+            <span class="legend-dot" :style="{ background: item.color ? `linear-gradient(135deg, ${item.color.from}, ${item.color.to})` : '#94a3b8' }"></span>
+          </div>
           <span class="legend-name">{{ item.icon }} {{ item.name }}</span>
           <span class="legend-amount">¥{{ item.amount.toFixed(2) }}</span>
           <span class="legend-percent">{{ item.percent }}%</span>
@@ -87,6 +89,29 @@ import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
 
 const recordsStore = useRecordsStore()
+
+// Get CSS variable value
+function getCSSVar(varName) {
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+}
+
+// Check if dark mode
+function isDarkMode() {
+  return document.documentElement.classList.contains('dark')
+}
+
+// Get theme-aware colors
+function getThemeColors() {
+  const isDark = isDarkMode()
+  return {
+    textPrimary: isDark ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.88)',
+    textSecondary: isDark ? 'rgba(255,255,255,0.56)' : 'rgba(0,0,0,0.56)',
+    gridColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+    tooltipBg: isDark ? 'rgba(30,30,55,0.95)' : 'rgba(255,255,255,0.95)',
+    tooltipText: isDark ? '#fff' : 'rgba(0,0,0,0.88)',
+    accent: getCSSVar('--color-accent') || '#667eea'
+  }
+}
 const viewMode = ref('month')
 const currentYear = ref(new Date().getFullYear())
 const currentMonth = ref(new Date().getMonth() + 1)
@@ -134,6 +159,42 @@ const totalExpense = computed(() => periodRecords.value.filter(r => r.type === '
 const totalIncome = computed(() => periodRecords.value.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0))
 const balance = computed(() => totalIncome.value - totalExpense.value)
 
+// Light premium color palette - cycling through
+// 浅色高级感配色 - 明亮清新，循环使用
+const categoryColorPalette = [
+  { from: '#fef08a', to: '#fde047' },  // 明黄
+  { from: '#c4b5fd', to: '#a78bfa' },  // 浅紫
+  { from: '#e5e7eb', to: '#d1d5db' },  // 浅灰
+  { from: '#fef3c7', to: '#fde68a' },  // 奶黄
+  { from: '#fed7aa', to: '#fdba74' },  // 桃橙
+  { from: '#e0e7ff', to: '#c7d2fe' },  // 浅蓝
+  { from: '#fecaca', to: '#fca5a5' },  // 浅粉
+  { from: '#fef9c3', to: '#fef08a' },  // 浅黄
+  { from: '#f1f5f9', to: '#e2e8f0' },  // 霜白
+  { from: '#fdba74', to: '#fb923c' },  // 亮橙
+  { from: '#fde047', to: '#facc15' },  // 金黄
+  { from: '#fcd34d', to: '#fbbf24' },  // 琥珀
+  { from: '#f8fafc', to: '#f1f5f9' },  // 雪白
+  { from: '#fca5a5', to: '#f87171' },  // 玫红
+  { from: '#d8b4fe', to: '#c084fc' },  // 淡紫
+  { from: '#d6d3d1', to: '#a8a29e' },  // 浅褐
+  { from: '#86efac', to: '#4ade80' },  // 鲜绿
+  { from: '#6ee7b7', to: '#34d399' },  // 薄荷
+]
+
+// Create gradient for chart
+function createGradient(ctx, fromColor, toColor) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, 100)
+  gradient.addColorStop(0, fromColor)
+  gradient.addColorStop(1, toColor)
+  return gradient
+}
+
+// Get color from palette by index (cycling through)
+function getCategoryColor(index) {
+  return categoryColorPalette[index % categoryColorPalette.length]
+}
+
 // Category breakdown
 const categoryBreakdown = computed(() => {
   const expenses = periodRecords.value.filter(r => r.type === 'expense')
@@ -141,12 +202,16 @@ const categoryBreakdown = computed(() => {
   const groups = {}
   for (const r of expenses) {
     const key = r.categoryName || '未分类'
-    if (!groups[key]) groups[key] = { name: key, icon: r.categoryIcon || '📦', color: r.categoryColor || '#94a3b8', amount: 0 }
+    if (!groups[key]) groups[key] = { name: key, icon: r.categoryIcon || '📦', amount: 0 }
     groups[key].amount += r.amount
   }
   return Object.values(groups)
     .sort((a, b) => b.amount - a.amount)
-    .map(g => ({ ...g, percent: total > 0 ? Math.round(g.amount / total * 100) : 0 }))
+    .map((g, i) => ({ 
+      ...g, 
+      color: getCategoryColor(i),
+      percent: total > 0 ? Math.round(g.amount / total * 100) : 0 
+    }))
 })
 
 // Trend data
@@ -173,41 +238,75 @@ const trendData = computed(() => {
 })
 
 function renderCharts() {
+  const themeColors = getThemeColors()
+  
   nextTick(() => {
     // Trend chart
     if (trendChart) trendChart.destroy()
     if (trendChartRef.value) {
       const ctx = trendChartRef.value.getContext('2d')
       const gradient = ctx.createLinearGradient(0, 0, 0, 200)
-      gradient.addColorStop(0, 'rgba(102, 126, 234, 0.3)')
-      gradient.addColorStop(1, 'rgba(102, 126, 234, 0)')
+      gradient.addColorStop(0, `${themeColors.accent}66`) // 40% opacity
+      gradient.addColorStop(1, `${themeColors.accent}00`) // 0% opacity
       trendChart = new Chart(ctx, {
         type: 'line',
         data: {
           labels: trendData.value.labels,
           datasets: [{
             data: trendData.value.data,
-            borderColor: '#667eea',
+            borderColor: themeColors.accent,
             backgroundColor: gradient,
             fill: true,
             tension: 0.4,
-            borderWidth: 2,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: '#667eea'
+            borderWidth: 3,
+            pointRadius: 2,
+            pointBackgroundColor: themeColors.accent,
+            pointBorderColor: isDarkMode() ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.2)',
+            pointBorderWidth: 2,
+            pointHoverRadius: 8,
+            pointHoverBackgroundColor: themeColors.accent,
+            pointHoverBorderColor: isDarkMode() ? '#fff' : '#000',
+            pointHoverBorderWidth: 3
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: {
-            backgroundColor: 'rgba(30,30,55,0.9)', titleColor: '#fff', bodyColor: '#fff',
-            borderColor: 'rgba(102,126,234,0.3)', borderWidth: 1, cornerRadius: 8,
-            callbacks: { label: (ctx) => `¥${ctx.raw.toFixed(2)}` }
-          }},
+          plugins: { 
+            legend: { display: false }, 
+            tooltip: {
+              backgroundColor: themeColors.tooltipBg,
+              titleColor: themeColors.tooltipText,
+              bodyColor: themeColors.tooltipText,
+              borderColor: `${themeColors.accent}80`,
+              borderWidth: 1,
+              cornerRadius: 12,
+              padding: 12,
+              displayColors: false,
+              callbacks: { label: (ctx) => `¥${ctx.raw.toFixed(2)}` }
+            }
+          },
           scales: {
-            x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 }, maxTicksLimit: viewMode.value === 'month' ? 10 : 12 } },
-            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 }, callback: v => `¥${v}` } }
+            x: { 
+              grid: { display: false },
+              ticks: { 
+                color: themeColors.textSecondary,
+                font: { size: 10 },
+                maxTicksLimit: viewMode.value === 'month' ? 10 : 12
+              }
+            },
+            y: { 
+              grid: { color: themeColors.gridColor },
+              ticks: { 
+                color: themeColors.textSecondary,
+                font: { size: 10 },
+                callback: v => `¥${v}`
+              }
+            }
+          },
+          animation: {
+            duration: 800,
+            easing: 'easeOutQuart'
           }
         }
       })
@@ -215,15 +314,26 @@ function renderCharts() {
     // Category doughnut
     if (categoryChart) categoryChart.destroy()
     if (categoryChartRef.value && categoryBreakdown.value.length > 0) {
-      categoryChart = new Chart(categoryChartRef.value.getContext('2d'), {
+      const ctx = categoryChartRef.value.getContext('2d')
+      
+      // Create gradients for each category
+      const gradientColors = categoryBreakdown.value.map((c) => {
+        const gradient = ctx.createRadialGradient(100, 100, 0, 100, 100, 150)
+        gradient.addColorStop(0, c.color.from)
+        gradient.addColorStop(1, c.color.to)
+        return gradient
+      })
+      
+      categoryChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
           labels: categoryBreakdown.value.map(c => c.name),
           datasets: [{
             data: categoryBreakdown.value.map(c => c.amount),
-            backgroundColor: categoryBreakdown.value.map(c => c.color),
+            backgroundColor: gradientColors,
             borderWidth: 0,
-            hoverOffset: 8
+            hoverOffset: 8,
+            hoverBorderWidth: 0
           }]
         },
         options: {
@@ -233,10 +343,29 @@ function renderCharts() {
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: 'rgba(30,30,55,0.9)', titleColor: '#fff', bodyColor: '#fff',
-              borderColor: 'rgba(102,126,234,0.3)', borderWidth: 1, cornerRadius: 8,
-              callbacks: { label: (ctx) => `${ctx.label}: ¥${ctx.raw.toFixed(2)}` }
+              backgroundColor: themeColors.tooltipBg,
+              titleColor: themeColors.tooltipText,
+              bodyColor: themeColors.tooltipText,
+              borderColor: 'transparent',
+              borderWidth: 0,
+              cornerRadius: 16,
+              padding: 16,
+              displayColors: true,
+              boxPadding: 6,
+              callbacks: { 
+                label: (ctx) => `${ctx.label}: ¥${ctx.raw.toFixed(2)}`,
+                afterLabel: (ctx) => {
+                  const percent = categoryBreakdown.value[ctx.dataIndex].percent
+                  return `占比: ${percent}%`
+                }
+              }
             }
+          },
+          animation: {
+            animateRotate: true,
+            animateScale: true,
+            duration: 1000,
+            easing: 'easeOutQuart'
           }
         }
       })
@@ -295,7 +424,25 @@ function getBarWidth(avg) {
 }
 
 watch([viewMode, currentYear, currentMonth, () => recordsStore.records.length], renderCharts)
-onMounted(renderCharts)
+
+// Watch for theme changes
+onMounted(() => {
+  renderCharts()
+  
+  // Create a MutationObserver to watch for theme class changes
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.attributeName === 'class') {
+        renderCharts()
+      }
+    })
+  })
+  
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class']
+  })
+})
 </script>
 
 <style scoped>
@@ -307,16 +454,42 @@ onMounted(renderCharts)
 .overview-card-balance { grid-column: 1 / -1; }
 .overview-label { display: block; font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--space-xs); }
 .overview-amount { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; }
-.chart-section { margin-bottom: var(--space-lg); }
+.chart-section { margin-bottom: var(--space-lg); position: relative; }
 .chart-title { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-md); color: var(--color-text-secondary); }
 .chart-container { height: 200px; position: relative; }
-.chart-container-doughnut { height: 220px; margin-bottom: var(--space-base); }
+.chart-container-doughnut { 
+  height: 200px; 
+  margin-bottom: var(--space-md);
+  position: relative;
+  overflow: visible;
+}
+
+/* Modern glass effect for doughnut chart */
+.chart-container-doughnut::before {
+  content: ''; position: absolute; inset: 0;
+  background: var(--gradient-surface);
+  border-radius: var(--radius-lg);
+  opacity: 0.3; z-index: -1;
+}
 .category-legend { display: flex; flex-direction: column; gap: var(--space-sm); }
-.legend-item { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--font-size-sm); }
-.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.legend-name { flex: 1; }
-.legend-amount { font-weight: var(--font-weight-medium); font-variant-numeric: tabular-nums; }
-.legend-percent { color: var(--color-text-secondary); min-width: 2.5rem; text-align: right; }
+.legend-item { display: flex; align-items: center; gap: var(--space-md); font-size: var(--font-size-sm); padding: var(--space-xs) 0; }
+.legend-dot-wrapper { flex-shrink: 0; position: relative; }
+.legend-dot { 
+  width: 12px; 
+  height: 12px; 
+  border-radius: 50%; 
+  flex-shrink: 0;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.legend-item:hover .legend-dot {
+  transform: scale(1.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.legend-name { flex: 1; font-weight: var(--font-weight-medium); }
+.legend-amount { font-weight: var(--font-weight-bold); font-variant-numeric: tabular-nums; }
+.legend-percent { color: var(--color-text-secondary); min-width: 3rem; text-align: right; font-weight: var(--font-weight-medium); }
 
 /* Weather Stats */
 .weather-stats-list {

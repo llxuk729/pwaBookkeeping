@@ -6,13 +6,13 @@
       </transition>
     </router-view>
     <NavBar />
-    <AppToast />
+    <AppToast ref="toastRef" />
     <UpdatePrompt />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref, provide } from 'vue'
 import NavBar from './components/NavBar.vue'
 import AppToast from './components/AppToast.vue'
 import UpdatePrompt from './components/UpdatePrompt.vue'
@@ -21,6 +21,16 @@ import { useCategoriesStore } from './stores/categories.js'
 
 const recordsStore = useRecordsStore()
 const categoriesStore = useCategoriesStore()
+
+// Toast reference for global access
+const toastRef = ref(null)
+
+// Provide toast function to all child components
+provide('showToast', (message, type = 'error', duration = 3000) => {
+  if (toastRef.value) {
+    toastRef.value.showToast(message, type, duration)
+  }
+})
 
 onMounted(async () => {
   await categoriesStore.loadCategories()

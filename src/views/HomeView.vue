@@ -41,16 +41,37 @@
         <div v-if="parserStatus.status === 'loading' && parserStatus.progress > 0" class="ai-progress-bar">
           <div class="ai-progress-fill" :style="{ width: parserStatus.progress + '%' }"></div>
         </div>
+        <!-- Speech engine status -->
+        <span v-if="isListening || speechProgress > 0" class="speech-status-badge">
+          {{ isUsingWhisper ? 'Whisper' : 'Speech' }}
+        </span>
+        <span v-else class="speech-status-placeholder"></span>
+      </div>
+      
+      <!-- Speech Loading Progress (for Whisper model download) -->
+      <div v-if="speechStatus === 'loading'" class="speech-loading-bar">
+        <div class="speech-loading-fill" :style="{ width: speechProgress + '%' }"></div>
+        <span class="speech-loading-text">{{ statusMessage }}</span>
       </div>
 
       <div class="input-row">
         <input ref="inputRef" v-model="inputText" class="input input-lg quick-input" placeholder="输入记账内容，如：黄小米35"
           @keyup.enter="handleParse" @input="handleInputChange" id="input-text" />
-        <button class="btn btn-icon voice-btn" :class="{ 'voice-active': isListening }" @click="handleVoiceButtonClick"
-          v-if="isSupported" id="voice-btn" :title="isListening ? '停止录音' : '语音输入'">
+        <button class="btn btn-icon voice-btn" 
+          :class="{ 'voice-active': isListening }"
+          @pointerdown="handleVoiceButtonDown"
+          @pointerup="handleVoiceButtonUp"
+          @pointercancel="handleVoiceButtonCancel"
+          @pointerleave="handleVoiceButtonCancel"
+          @click="handleVoiceButtonClick"
+          v-if="isSupported" 
+          id="voice-btn" 
+          :title="isListening ? '松开结束录音' : '按住说话录音'">
           <span class="voice-icon">🎤</span>
           <span v-if="isListening" class="voice-pulse"></span>
           <span v-if="isListening" class="voice-pulse voice-pulse-2"></span>
+          <!-- Show status indicator when processing -->
+          <span v-if="speechStatus === 'processing'" class="voice-processing">识别中</span>
         </button>
       </div>
 
@@ -234,7 +255,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, inject } from 'vue'
 import { useRecordsStore } from '../stores/records.js'
 import { useCategoriesStore } from '../stores/categories.js'
 import { useSpeech } from '../composables/useSpeech.js'
@@ -243,7 +264,23 @@ import { exportBackup } from '../services/export.js'
 
 const recordsStore = useRecordsStore()
 const categoriesStore = useCategoriesStore()
-const { isListening, transcript, interimTranscript, isSupported, toggleListening } = useSpeech()
+const { 
+  isListening, 
+  transcript, 
+  interimTranscript, 
+  isSupported, 
+  error: speechError,
+  status: speechStatus,
+  progress: speechProgress,
+  activeProvider,
+  isUsingWhisper,
+  statusMessage,
+  startListening,
+  stopListening,
+  abortListening,
+  getPlatformInfo
+} = useSpeech()
+
 
 // Parser status (simplified - no AI model loading needed)
 const parserStatus = {
@@ -283,8 +320,29 @@ const monthExpense = computed(() => recordsStore.monthExpense)
 // Backup Reminder Logic
 const showBackupReminder = ref(false)
 
+// Inject toast function from App
+const showToast = inject('showToast')
+
+// Platform info ref
+const platformInfo = ref(null)
+
 onMounted(() => {
   checkBackupReminder()
+  // Get platform info on mount - use nextTick to ensure engine is ready
+  nextTick(() => {
+    // Try to get platform info, if engine not initialized yet, initialize it
+    const info = getPlatformInfo()
+    if (info) {
+      platformInfo.value = info
+    } else {
+      // If no engine yet, try to initialize it to get platform info
+      initializeEngine().then(() => {
+        platformInfo.value = getPlatformInfo()
+      }).catch(err => {
+        console.warn('Failed to initialize speech engine for platform info:', err)
+      })
+    }
+  })
 })
 
 function checkBackupReminder() {
@@ -329,10 +387,10 @@ function dismissBackupReminder() {
 async function doBackup() {
   try {
     await exportBackup()
-    alert('备份成功！')
+    showToast('备份成功！', 'success')
     showBackupReminder.value = false
   } catch (e) {
-    alert('备份失败: ' + e.message)
+    showToast('备份失败: ' + e.message, 'error')
   }
 }
 
@@ -364,22 +422,57 @@ watch(transcript, (val) => {
   }
 })
 
-// Handle voice button click with better UX for PWA
-async function handleVoiceButtonClick() {
-  // Check if we're in PWA standalone mode
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone
+// Watch for speech errors and show user feedback
+watch(speechError, (err) => {
+  if (err) {
+    // Show error to user
+    showToast(err, 'error')
+  }
+})
 
-  if (isStandalone && !isListening.value) {
-    // In PWA mode, show a brief message about permission if needed
-    try {
-      await toggleListening()
-    } catch (err) {
-      console.warn('Voice recognition error:', err)
-    }
+// Handle voice button - 按住说话模式
+// Press and hold to record, release to process
+function handleVoiceButtonDown(event) {
+  // Prevent default behavior
+  event.preventDefault()
+  
+  // Check if speech is supported
+  if (!isSupported.value) {
+    showToast('您的浏览器不支持语音识别功能，请使用 Chrome、Edge 或 Safari 浏览器。', 'warning')
+    return
+  }
+
+  // Start listening
+  startListening()
+}
+
+function handleVoiceButtonUp(event) {
+  // Prevent default behavior
+  event.preventDefault()
+  
+  // Stop listening and process
+  stopListening()
+}
+
+// Cancel recording (touch cancel or mouse leave)
+function handleVoiceButtonCancel(event) {
+  if (isListening.value) {
+    abortListening()
+  }
+}
+
+// Legacy click handler for browsers that don't support pointer events well
+async function handleVoiceButtonClick() {
+  if (!isSupported.value) {
+    showToast('您的浏览器不支持语音识别功能，请使用 Chrome、Edge 或 Safari 浏览器。', 'warning')
+    return
+  }
+  
+  // Toggle mode for click (fallback)
+  if (isListening.value) {
+    await stopListening()
   } else {
-    // Normal browser mode
-    toggleListening()
+    await startListening()
   }
 }
 
@@ -830,6 +923,7 @@ async function handleSaveMultiple() {
   margin-bottom: var(--space-sm);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+  min-height: 20px; /* Ensure consistent height */
 }
 
 .ai-status-dot {
@@ -977,5 +1071,68 @@ async function handleSaveMultiple() {
     transform: scale(0.9);
     opacity: 0.6;
   }
+}
+
+/* Speech Status Badge */
+.speech-status-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  background: rgba(102, 126, 234, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent-light);
+  margin-left: var(--space-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  height: 18px;
+  box-sizing: border-box;
+}
+
+.speech-status-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 18px;
+  margin-left: var(--space-sm);
+  box-sizing: border-box;
+}
+
+/* Speech Loading Bar */
+.speech-loading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-sm);
+}
+
+.speech-loading-fill {
+  flex: 1;
+  height: 4px;
+  background: var(--color-accent);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.speech-loading-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Voice Processing Indicator */
+.voice-processing {
+  position: absolute;
+  bottom: -8px;
+  font-size: 0.6rem;
+  background: rgba(245, 87, 108, 0.9);
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
 </style>
