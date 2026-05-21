@@ -2,6 +2,8 @@
 
 一个专门为早餐店/家庭记账场景打造的**纯本地、高隐私、强智能**的渐进式 Web 应用 (PWA)。
 
+在线地址：[https://llxuk729.github.io/pwaBookkeeping/](https://llxuk729.github.io/pwaBookkeeping/)
+
 基于现代 Web 技术栈构建，它不仅支持传统的键盘输入，还集成了浏览器原生的语音识别，并且突破性地在前端 Web Worker 中直接运行**大模型 (Transformers.js)** 进行自然语言的语义理解和自动分类，整个过程不需要向任何外部服务器发送您的隐私数据。
 
 ## ✨ 核心特性
